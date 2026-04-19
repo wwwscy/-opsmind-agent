@@ -8,11 +8,10 @@
 |------|------|
 | Java 17 + Spring Boot 3 | 后端框架 |
 | LangChain4j 0.35.0 | ReAct 推理 + Tool Calling + Memory |
-| H2 内嵌数据库 | 开发阶段 MySQL 替代 |
-| MiniMax M2.7 / M2.1 | LLM 推理引擎 |
-| ConcurrentHashMap | 开发阶段 Redis 替代 |
-
-**生产环境替换路径：** H2 → MySQL，ConcurrentHashMap → Redis，内存向量库 → Milvus
+| **MySQL 8** | 持久化存储（告警、诊断记录） |
+| **Milvus 2.5** | 向量数据库（RAG 知识库） |
+| **Redis 7** | 会话记忆缓存 |
+| MiniMax M2.1 | LLM 推理引擎 |
 
 ## 核心架构
 
@@ -24,34 +23,119 @@
           诊断结论 + RAG 参考
 ```
 
-## 技术亮点（面试可展开）
+## 机器依赖
 
-- **ReAct 推理链**：Thought → Action → Observation → Decision，可解释的诊断过程
-- **Tool Calling**：统一工具接口，Agent 按需调用，不关心实现细节
-- **RAG 知识库**：历史故障案例向量化存储，新故障 RAG 检索相似案例辅助推理
-- **Multi-Agent 协作**：指标/拓扑/知识库三个子 Agent 并行执行，Supervisor 汇总结果
-- **MCP 协议**：版本回退、扩容、切流等运维动作标准化为 MCP 工具接口
-- **Memory 闭环**：对话历史存 ConcurrentHashMap，用户反馈记入长期记忆，持续优化 RAG 质量
+### 必须安装
+
+| 依赖 | 版本 | 用途 | 安装方式 |
+|------|------|------|----------|
+| **Java** | 17+ | 运行 Spring Boot | `brew install openjdk@17` |
+| **Maven** | 3.8+ | 编译项目 | `brew install maven` |
+| **MySQL** | 8.0 | 告警/诊断数据持久化 | Docker 或本地安装 |
+| **Milvus** | 2.5+ | 向量数据库 | Docker 部署 |
+| **Redis** | 7+ | 会话缓存 | Docker 或本地安装 |
+
+### 可选（开发用）
+
+| 依赖 | 用途 | 说明 |
+|------|------|------|
+| Docker + Colima | 运行环境 | Mac 需要 Colima 运行 Docker |
+| H2 Console | 数据库调试 | 开发阶段可用，路径 `/h2-console` |
+
+### 网络要求
+
+- 能够访问 **MiniMax API** (`https://api.minimax.chat`)
+- 能够访问 **Docker Hub**（国内需要配置代理）
 
 ## 快速启动
 
-### 1. 配置 MiniMax API Key
+### 方式一：Docker Compose 一键部署（推荐）
 
 ```bash
-cp .env.example .env
-# 编辑 .env，填入真实 API Key
+# 克隆项目
+git clone https://github.com/wwwscy/-opsmind-agent.git
+cd opsmind-agent
+
+# 启动所有依赖服务
+docker-compose up -d
+
+# 编译并启动应用
+./mvnw package -DskipTests
+java -jar target/opsmind-agent-1.0.0.jar
 ```
 
-API Key 获取：https://platform.minimaxi.com/
+### 方式二：手动分步部署
 
-### 2. 编译运行（无需 MySQL/Redis/Milvus）
+#### 1. 启动 MySQL
 
 ```bash
-export JAVA_HOME=/opt/homebrew/opt/openjdk@17
-./mvnw spring-boot:run
+docker run -d --name opsmind-mysql \
+  -p 3306:3306 \
+  -e MYSQL_ROOT_PASSWORD=opsmind_root \
+  -e MYSQL_DATABASE=opsmind \
+  -e MYSQL_USER=opsmind \
+  -e MYSQL_PASSWORD=opsmind_pass \
+  -v /your/data/path/mysql:/var/lib/mysql \
+  mysql:8.0
 ```
 
-### 3. 测试诊断接口
+#### 2. 启动 Redis
+
+```bash
+docker run -d --name opsmind-redis \
+  -p 6379:6379 \
+  -v /your/data/path/redis:/data \
+  redis:7-alpine
+```
+
+#### 3. 启动 Milvus
+
+```bash
+docker run -d --name milvus \
+  -p 19530:19530 \
+  -p 9091:9091 \
+  milvusdb/milvus:v2.5.0
+```
+
+#### 4. 配置 application.yml
+
+```yaml
+spring:
+  datasource:
+    url: jdbc:mysql://localhost:3306/opsmind
+    username: opsmind
+    password: opsmind_pass
+
+milvus:
+  host: localhost
+  port: 19530
+
+redis:
+  host: localhost
+  port: 6379
+```
+
+#### 5. 编译运行
+
+```bash
+./mvnw package -DskipTests
+java -jar target/opsmind-agent-1.0.0.jar
+```
+
+### 配置 MiniMax API Key
+
+编辑 `src/main/resources/application.yml`，修改：
+
+```yaml
+minimax:
+  api-key: 你的API Key
+```
+
+API Key 获取：https://platform.minimax.com/
+
+## 测试接口
+
+### 发起诊断
 
 ```bash
 curl -X POST http://localhost:8080/api/diagnosis \
@@ -59,18 +143,22 @@ curl -X POST http://localhost:8080/api/diagnosis \
   -d '{"input": "Pod nginx-7d9f8c 告警 CPU 99%，帮我看看"}'
 ```
 
-### 4. 查看推理过程
+### 查询诊断进度
 
 ```bash
 curl http://localhost:8080/api/diagnosis/{sessionId}
 ```
 
-### 5. 提交反馈
+### 告警列表
 
 ```bash
-curl -X POST http://localhost:8080/api/diagnosis/{sessionId}/feedback \
-  -H "Content-Type: application/json" \
-  -d '{"feedback": "good"}'
+curl http://localhost:8080/api/alerts
+```
+
+### 健康检查
+
+```bash
+curl http://localhost:8080/api/health
 ```
 
 ## 目录结构
@@ -81,30 +169,32 @@ src/main/java/com/aiops/agent/
 ├── config/
 │   └── LangChain4jConfig.java        # MiniMax LLM 配置
 ├── controller/
-│   └── AiDiagnosisController.java      # HTTP 对话接口
+│   ├── AiDiagnosisController.java    # 诊断对话接口
+│   ├── AlertController.java          # 告警管理接口
+│   └── KnowledgeBaseController.java  # 知识库管理接口
 ├── service/
-│   ├── DiagnosisService.java          # 诊断服务（入口）
-│   ├── DiagnosisRecordRepository.java
-│   └── entity/
-│       └── DiagnosisRecord.java       # 诊断记录实体
+│   └── DiagnosisService.java         # 诊断服务（入口）
 ├── agent/
-│   ├── ReactEngine.java               # ReAct 推理引擎（核心）
+│   ├── ReactEngine.java             # ReAct 推理引擎（核心）
 │   ├── model/
-│   │   ├── ReActStep.java            # 推理步骤
-│   │   └── ToolCallResult.java       # 工具执行结果
+│   │   └── ReActStep.java           # 推理步骤
 │   ├── memory/
-│   │   └── SessionMemory.java        # 内存会话记忆
-│   └── MultiAgentSupervisor.java     # Multi-Agent 调度器
+│   │   └── SessionMemory.java       # 会话记忆（Redis）
+│   └── MultiAgentSupervisor.java    # Multi-Agent 调度器
 ├── tools/
-│   ├── Tool.java                     # Tool 接口
 │   ├── MetricsQueryTool.java         # 指标查询
 │   ├── TopologyQueryTool.java        # 拓扑查询
-│   ├── ChangeQueryTool.java          # 变更记录查询
-│   └── KnowledgeBaseTool.java        # RAG 知识库检索
+│   ├── ChangeQueryTool.java         # 变更记录查询
+│   └── KnowledgeBaseTool.java       # RAG 知识库检索
+├── monitor/
+│   ├── AnomalyDetector.java         # 异常检测
+│   ├── MetricsCollector.java         # 指标采集
+│   ├── AlertController.java         # 告警控制器
+│   └── FeishuNotificationService.java # 飞书通知
 ├── mcp/
-│   └── ToolSpec.java                 # MCP 工具规范
+│   └── ToolSpec.java                # MCP 工具规范
 └── rag/
-    └── KnowledgeBaseService.java      # RAG 服务（内存向量库）
+    └── MilvusKnowledgeBaseService.java # Milvus RAG 服务
 ```
 
 ## 接入真实华为云 API
@@ -116,6 +206,34 @@ src/main/java/com/aiops/agent/
 | MetricsQueryTool | 华为云 APM / CES 指标接口 |
 | TopologyQueryTool | 华为云 VPC / CMDB 接口 |
 | ChangeQueryTool | 华为云变更管理平台接口 |
+
+## 常见问题
+
+### Q: Docker 镜像拉取失败？
+
+国内网络需要配置代理，或使用国内镜像站：
+
+```bash
+# 配置 Docker 代理（如果宿主机有代理）
+docker run -e HTTP_PROXY=http://host.docker.internal:7890 ...
+```
+
+### Q: MySQL 连接失败？
+
+检查 MySQL 是否启动，端口 3306 是否可访问：
+
+```bash
+docker ps | grep mysql
+mysql -h localhost -u opsmind -p opsmind_pass
+```
+
+### Q: Milvus 连接失败？
+
+Milvus 启动后需要等待约 30 秒才能接受连接：
+
+```bash
+docker logs milvus  # 查看启动状态
+```
 
 ## 面试话术
 
