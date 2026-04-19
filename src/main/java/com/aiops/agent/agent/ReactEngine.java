@@ -30,7 +30,7 @@ public class ReactEngine {
     private final SessionMemory sessionMemory;
     private final List<Tool> tools;
 
-    @Value("${react.max-iterations:5}")
+    @Value("${react.max-iterations:8}")
     private int maxIterations;
 
     private final ObjectMapper mapper = new ObjectMapper();
@@ -210,6 +210,9 @@ public class ReactEngine {
         sb.append("- query_topology({\"target\":\"pod|vm|physical\",\"target_name\":\"名称\"})\n");
         sb.append("- query_change_records({\"target_name\":\"名称\",\"hours\":6})\n");
         sb.append("- search_knowledge_base({\"query\":\"告警描述\",\"top_k\":3})\n");
+        sb.append("- query_pod_logs({\"pod_name\":\"Pod名称\",\"namespace\":\"命名空间\",\"lines\":100,\"keyword\":\"可选过滤关键词\"})\n");
+        sb.append("- query_events({\"namespace\":\"命名空间\",\"pod_name\":\"Pod名称(可选)\",\"limit\":50})\n");
+        sb.append("- query_metrics_history({\"target\":\"pod|vm\",\"target_name\":\"名称\",\"metric\":\"cpu|memory|latency\",\"duration_minutes\":30})\n");
         sb.append("\n");
         sb.append("【重要】：如果上述工具返回失败或错误，或者历史案例已给出充分诊断，直接输出【诊断结论】并写 STOP，不要再调用新工具。\n");
         sb.append("根据以上信息输出诊断结论：");

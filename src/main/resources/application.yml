@@ -72,7 +72,7 @@ monitoring:
       severity: medium
 
 react:
-  max-iterations: 5
+  max-iterations: 8
   timeout-seconds: 90
 
 server:
