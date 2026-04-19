@@ -75,5 +75,16 @@ react:
   max-iterations: 8
   timeout-seconds: 90
 
+# Milvus Vector DB 配置（生产环境）
+# 激活方式：spring.profiles.active=milvus
+# 启动 Milvus: docker run -d --name milvus --security-opt seccomp:unconfined \\
+#   -p 19530:19530 -p 9091:9091 \\
+#   milvusdb/milvus:v3.1.0 /milvus/bin/milvus run standalone
+milvus:
+  host: localhost
+  port: 19530
+  collection-name: opsmind_kb
+  dimension: 384
+
 server:
   port: 8080
