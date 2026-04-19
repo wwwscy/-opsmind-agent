@@ -301,6 +301,19 @@
     if (tab === 'kb') loadKb();
   }
 
+  // expose to window for debugging / inline handlers
+  window.setTab = setTab;
+  window.loadAlerts = loadAlerts;
+  window.loadKb = loadKb;
+  window.loadSummary = loadSummary;
+  window.goPage = goPage;
+  window.applyFilter = applyFilter;
+  window.clearFilter = clearFilter;
+  window.exportCsv = exportCsv;
+  window.demo = demo;
+  window.sendMsg = sendMsg;
+
+
   // ── Load alerts (paginated) ────────────────────────────
   function loadAlerts() {
     var panel = document.getElementById('panel-alerts');
