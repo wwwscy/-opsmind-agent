@@ -474,8 +474,7 @@
     if (diff < 86400) return Math.floor(diff/3600) + '小时前';
     return d.toLocaleDateString('zh-CN');
   }
-  function fmt(v) { return v == null ? '-' : (typeof v === 'number' ? (v > 100 ? v.toFixed(0) : v.toFixed(
-2) : v); }
+  function fmt(v) { return v == null ? '-' : (typeof v === 'number' ? (v > 100 ? v.toFixed(0) : v.toFixed(2)) : v); }
   function esc(s) { return s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
   // ── Knowledge base ─────────────────────────────────────
