@@ -1,593 +1,457 @@
 <!DOCTYPE html>
 <html lang="zh">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>OpsMind — AI 智能运维诊断平台</title>
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    :root {
-      --bg: #0f1117; --surface: #1a1d27; --surface2: #21253a;
-      --border: #2d3142; --text: #e2e8f0; --text-muted: #64748b;
-      --blue: #3b82f6; --green: #22c55e; --orange: #f97316;
-      --yellow: #eab308; --red: #ef4444; --purple: #a855f7;
-    }
-    body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: var(--bg); color: var(--text); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
-
-    header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 10px 20px; display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
-    header h1 { font-size: 15px; font-weight: 700; color: var(--blue); }
-    .tag { font-size: 11px; background: #1e293b; color: var(--text-muted); padding: 2px 8px; border-radius: 4px; }
-    .header-right { margin-left: auto; display: flex; align-items: center; gap: 10px; }
-    .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text-muted); }
-    .status-dot.ok { background: var(--green); box-shadow: 0 0 6px var(--green); }
-    .status-dot.error { background: var(--red); }
-    .status-text { font-size: 12px; color: var(--text-muted); }
-    .refresh-btn { background: var(--border); border: none; color: var(--text-muted); padding: 5px 10px; border-radius: 6px; font-size: 12px; cursor: pointer; }
-    .refresh-btn:hover { background: #3d4255; }
-
-    /* ── Stats bar ── */
-    .stats-bar { background: var(--surface); border-bottom: 1px solid var(--border); display: flex; gap: 0; padding: 0 20px; flex-shrink: 0; overflow-x: auto; }
-    .stat-item { padding: 8px 16px; display: flex; align-items: center; gap: 6px; border-bottom: 2px solid transparent; font-size: 12px; cursor: pointer; white-space: nowrap; }
-    .stat-item:hover { color: var(--text); }
-    .stat-item.active { border-bottom-color: var(--blue); color: var(--text); }
-    .stat-num { font-size: 16px; font-weight: 700; }
-    .stat-label { color: var(--text-muted); }
-    .stat-critical .stat-num { color: var(--red); }
-    .stat-high .stat-num { color: var(--orange); }
-    .stat-medium .stat-num { color: var(--yellow); }
-    .stat-low .stat-num { color: var(--text-muted); }
-    .stat-resolved .stat-num { color: var(--green); }
-    .stat-total .stat-num { color: var(--blue); }
-
-    /* ── Tabs ── */
-    .tabs { background: var(--surface); border-bottom: 1px solid var(--border); display: flex; padding: 0 20px; flex-shrink: 0; }
-    .tab { padding: 9px 14px; font-size: 13px; color: var(--text-muted); cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.15s; user-select: none; }
-    .tab:hover { color: var(--text); }
-    .tab.active { color: var(--blue); border-bottom-color: var(--blue); font-weight: 500; }
-    .tab-badge { display: inline-flex; align-items: center; justify-content: center; background: var(--red); color: white; font-size: 10px; font-weight: 600; min-width: 16px; height: 16px; border-radius: 8px; padding: 0 4px; margin-left: 4px; vertical-align: top; }
-    .tab-badge.blue { background: var(--blue); }
-
-    /* ── Filter bar ── */
-    .filter-bar { background: var(--bg); border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; padding: 10px 20px; flex-shrink: 0; flex-wrap: wrap; }
-    .filter-group { display: flex; align-items: center; gap: 6px; }
-    .filter-label { font-size: 11px; color: var(--text-muted); }
-    .filter-select { background: var(--surface); border: 1px solid var(--border); color: var(--text); font-size: 12px; padding: 4px 8px; border-radius: 6px; outline: none; cursor: pointer; }
-    .filter-select:focus { border-color: var(--blue); }
-    .filter-input { background: var(--surface); border: 1px solid var(--border); color: var(--text); font-size: 12px; padding: 4px 8px; border-radius: 6px; outline: none; width: 140px; }
-    .filter-input:focus { border-color: var(--blue); }
-    .filter-btn { background: var(--blue); border: none; color: white; font-size: 12px; padding: 5px 12px; border-radius: 6px; cursor: pointer; }
-    .filter-btn:hover { opacity: 0.85; }
-    .filter-btn.export { background: var(--surface2); border: 1px solid var(--border); color: var(--text); }
-    .filter-btn.export:hover { border-color: var(--blue); color: var(--blue); }
-    .filter-btn.clear { background: var(--surface2); border: 1px solid var(--border); color: var(--text-muted); }
-
-    /* ── Main ── */
-    .main { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
-    .panel { flex: 1; overflow-y: auto; padding: 14px 20px; display: flex; flex-direction: column; gap: 10px; }
-
-    /* ── Alert card ── */
-    .alert-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; border-left: 3px solid var(--border); transition: box-shadow 0.2s; }
-    .alert-card:hover { box-shadow: 0 2px 12px rgba(0,0,0,0.3); }
-    .alert-card.critical { border-left-color: var(--red); }
-    .alert-card.high { border-left-color: var(--orange); }
-    .alert-card.medium { border-left-color: var(--yellow); }
-    .alert-card.resolved { border-left-color: var(--green); opacity: 0.65; }
-    .alert-card.diagnosing { border-left-color: var(--blue); }
-    .alert-card.pending { border-left-color: var(--text-muted); }
-    .alert-header { display: flex; align-items: center; gap: 8px; margin-bottom: 7px; }
-    .sev-badge { font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 4px; }
-    .sev-critical { background: rgba(239,68,68,0.18); color: var(--red); }
-    .sev-high { background: rgba(249,115,22,0.18); color: var(--orange); }
-    .sev-medium { background: rgba(234,179,8,0.18); color: var(--yellow); }
-    .sev-low { background: rgba(100,116,139,0.18); color: var(--text-muted); }
-    .alert-name { font-size: 13px; font-weight: 600; }
-    .alert-time { font-size: 11px; color: var(--text-muted); margin-left: auto; }
-    .alert-metrics { font-size: 12px; color: var(--text-muted); display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 7px; }
-    .mval { color: var(--text); font-weight: 500; }
-    .diagnosis { background: #13161f; border: 1px solid var(--border); border-radius: 8px; padding: 9px 12px; font-size: 12px; line-height: 1.65; margin-top: 6px; color: var(--text); }
-    .diag-label { font-size: 9px; color: var(--blue); font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 5px; }
-    .diag-footer { display: flex; align-items: center; gap: 6px; margin-top: 6px; font-size: 11px; color: var(--text-muted); flex-wrap: wrap; }
-    .spinner { width: 11px; height: 11px; border: 2px solid currentColor; border-top-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite; }
-    @keyframes spin { to { transform: rotate(360deg); } }
-    .feishu-ok { color: var(--green); }
-    .feishu-fail { color: var(--red); }
-
-    /* ── Pagination ── */
-    .pagination { display: flex; align-items: center; justify-content: center; gap: 6px; padding: 12px 0; flex-shrink: 0; }
-    .page-btn { background: var(--surface2); border: 1px solid var(--border); color: var(--text); font-size: 12px; padding: 5px 10px; border-radius: 6px; cursor: pointer; min-width: 32px; text-align: center; }
-    .page-btn:hover { border-color: var(--blue); color: var(--blue); }
-    .page-btn.disabled { opacity: 0.35; cursor: not-allowed; }
-    .page-info { font-size: 12px; color: var(--text-muted); padding: 0 8px; }
-
-    /* ── KB ── */
-    .kb-case { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; border-left: 3px solid var(--blue); }
-    .kb-feature { font-size: 13px; color: var(--text); margin-bottom: 6px; }
-    .kb-cause { font-size: 12px; color: var(--yellow); margin-bottom: 5px; }
-    .kb-steps { font-size: 11px; color: var(--text-muted); padding-left: 10px; line-height: 1.7; }
-    .kb-meta { font-size: 10px; color: var(--text-muted); margin-top: 5px; display: flex; gap: 10px; }
-    .kb-ok { color: var(--green); }
-
-    /* ── Chat ── */
-    .chat-wrap { flex: 1; display: flex; flex-direction: column; max-width: 680px; width: 100%; margin: 0 auto; padding: 14px 0; }
-    .chat-box { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; }
-    .chat-msg { max-width: 82%; padding: 9px 13px; border-radius: 12px; font-size: 13px; line-height: 1.6; }
-    .chat-user { align-self: flex-end; background: var(--blue); border: 1px solid var(--blue); }
-    .chat-agent { align-self: flex-start; background: var(--surface); border: 1px solid var(--border); }
-    .chat-input-row { display: flex; gap: 8px; }
-    .chat-input { flex: 1; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 9px 13px; color: var(--text); font-size: 13px; outline: none; }
-    .chat-input:focus { border-color: var(--blue); }
-    .chat-send { background: var(--blue); border: none; color: white; border-radius: 8px; padding: 9px 16px; font-size: 13px; cursor: pointer; }
-    .chat-send:hover { opacity: 0.85; }
-
-    /* ── Demo ── */
-    .demo-panel { padding: 12px 20px; background: var(--surface); border-top: 1px solid var(--border); flex-shrink: 0; }
-    .demo-title { font-size: 11px; color: var(--text-muted); margin-bottom: 8px; }
-    .demo-buttons { display: flex; gap: 8px; flex-wrap: wrap; }
-    .demo-btn { padding: 6px 13px; border-radius: 7px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 12px; cursor: pointer; }
-    .demo-btn:hover { border-color: var(--blue); color: var(--blue); }
-    .demo-btn.cpu { border-color: var(--orange); color: var(--orange); }
-    .demo-btn.mem { border-color: var(--red); color: var(--red); }
-    .demo-btn.ok { border-color: var(--green); color: var(--green); }
-    .demo-status { margin-top: 7px; font-size: 11px; color: var(--text-muted); display: flex; gap: 14px; flex-wrap: wrap; }
-    .demo-status span { display: flex; align-items: center; gap: 4px; }
-    .dval { color: var(--text); font-weight: 500; }
-    .dval.warn { color: var(--orange); }
-    .dval.bad { color: var(--red); }
-    .dval.good { color: var(--green); }
-
-    .empty { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 180px; color: var(--text-muted); font-size: 13px; gap: 6px; }
-    .empty-ic { font-size: 36px; opacity: 0.25; }
-
-    /* ── Loading ── */
-    .loading-row { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 20px; color: var(--text-muted); font-size: 13px; }
-    .loading-spinner { width: 16px; height: 16px; border: 2px solid var(--border); border-top-color: var(--blue); border-radius: 50%; animation: spin 0.8s linear infinite; }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OpsMind</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#0f1117;--s:#1a1d27;--s2:#21253a;--bd:#2d3142;--tx:#e2e8f0;--tm:#64748b;--bl:#3b82f6;--gr:#22c55e;--or:#f97316;--yl:#eab308;--rd:#ef4444}
+body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:var(--bg);color:var(--tx);height:100vh;display:flex;flex-direction:column;overflow:hidden}
+.hh{background:var(--s);border-bottom:1px solid var(--bd);padding:10px 20px;display:flex;align-items:center;gap:10px;flex-shrink:0}
+.hh h1{font-size:15px;font-weight:700;color:var(--bl)}
+.tag{font-size:11px;background:#1e293b;color:var(--tm);padding:2px 8px;border-radius:4px}
+.hr{margin-left:auto;display:flex;align-items:center;gap:10px}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--tm)}
+.dot.ok{background:var(--gr);box-shadow:0 0 6px var(--gr)}
+.dot.er{background:var(--rd)}
+.tx{font-size:12px;color:var(--tm)}
+.rb{background:var(--bd);border:none;color:var(--tm);padding:5px 10px;border-radius:6px;font-size:12px;cursor:pointer}
+.rb:hover{background:#3d4255}
+.sb{background:var(--s);border-bottom:1px solid var(--bd);display:flex;overflow-x:auto;flex-shrink:0}
+.si{padding:8px 14px;display:flex;align-items:center;gap:6px;border-bottom:2px solid transparent;font-size:12px;cursor:pointer;white-space:nowrap}
+.si:hover{color:var(--tx)}
+.si.ac{border-bottom-color:var(--bl);color:var(--tx)}
+.sn{font-size:15px;font-weight:700}
+.si[data-sev="crit"] .sn{color:var(--rd)}
+.si[data-sev="high"] .sn{color:var(--or)}
+.si[data-sev="med"] .sn{color:var(--yl)}
+.si[data-sev="low"] .sn{color:var(--tm)}
+.si[data-sev="res"] .sn{color:var(--gr)}
+.tb{background:var(--s);border-bottom:1px solid var(--bd);display:flex;padding:0 20px;flex-shrink:0}
+.tab{padding:9px 14px;font-size:13px;color:var(--tm);cursor:pointer;border-bottom:2px solid transparent;transition:all .15s}
+.tab:hover{color:var(--tx)}
+.tab.ac{color:var(--bl);border-bottom-color:var(--bl);font-weight:500}
+.tb2{background:var(--bg);border-bottom:1px solid var(--bd);display:flex;align-items:center;gap:8px;padding:9px 20px;flex-wrap:wrap;flex-shrink:0}
+.sel{background:var(--s);border:1px solid var(--bd);color:var(--tx);font-size:12px;padding:4px 8px;border-radius:6px;outline:none}
+.in{background:var(--s);border:1px solid var(--bd);color:var(--tx);font-size:12px;padding:4px 8px;border-radius:6px;outline:none;width:130px}
+.in:focus{border-color:var(--bl)}
+.btn{background:var(--bl);border:none;color:#fff;font-size:12px;padding:5px 12px;border-radius:6px;cursor:pointer}
+.btn:hover{opacity:.85}
+.btn2{background:var(--s2);border:1px solid var(--bd);color:var(--tx);font-size:12px;padding:5px 12px;border-radius:6px;cursor:pointer}
+.btn2:hover{border-color:var(--bl);color:var(--bl)}
+.mn{flex:1;overflow:hidden;display:flex;flex-direction:column}
+.pn{flex:1;overflow-y:auto;padding:14px 20px;display:flex;flex-direction:column;gap:10px}
+.pn2{padding:0 20px;flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:10px}
+.ac{background:var(--s);border:1px solid var(--bd);border-radius:10px;padding:12px 14px;border-left:3px solid var(--bd)}
+.ac.crit{border-left-color:var(--rd)}
+.ac.high{border-left-color:var(--or)}
+.ac.med{border-left-color:var(--yl)}
+.ac.res{opacity:.65;border-left-color:var(--gr)}
+.ac.diag{border-left-color:var(--bl)}
+.ah{display:flex;align-items:center;gap:8px;margin-bottom:7px}
+.bd{font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px}
+.bd.c{background:rgba(239,68,68,.18);color:var(--rd)}
+.bd.h{background:rgba(249,115,22,.18);color:var(--or)}
+.bd.m{background:rgba(234,179,8,.18);color:var(--yl)}
+.bd.l{background:rgba(100,116,139,.18);color:var(--tm)}
+.an{font-size:13px;font-weight:600}
+.at{font-size:11px;color:var(--tm);margin-left:auto}
+.am{font-size:12px;color:var(--tm);display:flex;gap:10px;flex-wrap:wrap;margin-bottom:7px}
+.mv{color:var(--tx);font-weight:500}
+.dg{background:#13161f;border:1px solid var(--bd);border-radius:8px;padding:9px 12px;font-size:12px;line-height:1.65;margin-top:6px;color:var(--tx)}
+.dl{font-size:9px;color:var(--bl);font-weight:700;text-transform:uppercase;letter-spacing:.6px;margin-bottom:5px}
+.df{display:flex;align-items:center;gap:6px;margin-top:6px;font-size:11px;color:var(--tm);flex-wrap:wrap}
+.spin{width:11px;height:11px;border:2px solid currentColor;border-top-color:transparent;border-radius:50%;animation:sp .8s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+.fok{color:var(--gr)}
+.ff{color:var(--rd)}
+.pg{display:flex;align-items:center;justify-content:center;gap:6px;padding:12px 0;flex-shrink:0}
+.pbtn{background:var(--s2);border:1px solid var(--bd);color:var(--tx);font-size:12px;padding:5px 10px;border-radius:6px;cursor:pointer;min-width:32px;text-align:center}
+.pbtn:hover{border-color:var(--bl);color:var(--bl)}
+.pbtn.di{opacity:.35;cursor:not-allowed}
+.pinfo{font-size:12px;color:var(--tm);padding:0 8px}
+.kc{background:var(--s);border:1px solid var(--bd);border-radius:10px;padding:12px 14px;border-left:3px solid var(--bl)}
+.kf{font-size:13px;color:var(--tx);margin-bottom:6px}
+.kcau{font-size:12px;color:var(--yl);margin-bottom:5px}
+.kst{font-size:11px;color:var(--tm);padding-left:10px;line-height:1.7}
+.kmeta{font-size:10px;color:var(--tm);margin-top:5px;display:flex;gap:10px}
+.kok{color:var(--gr)}
+.dp{padding:12px 20px;background:var(--s);border-top:1px solid var(--bd);flex-shrink:0}
+.dt{font-size:11px;color:var(--tm);margin-bottom:8px}
+.db{display:flex;gap:8px;flex-wrap:wrap}
+.db2{padding:6px 13px;border-radius:7px;border:1px solid var(--bd);background:var(--bg);color:var(--tx);font-size:12px;cursor:pointer}
+.db2:hover{border-color:var(--bl);color:var(--bl)}
+.db2.cpu{border-color:var(--or);color:var(--or)}
+.db2.mem{border-color:var(--rd);color:var(--rd)}
+.db2.ok{border-color:var(--gr);color:var(--gr)}
+.ds{margin-top:7px;font-size:11px;color:var(--tm);display:flex;gap:14px;flex-wrap:wrap}
+.ds span{display:flex;align-items:center;gap:4px}
+.dv{color:var(--tx);font-weight:500}
+.dv.warn{color:var(--or)}
+.dv.bad{color:var(--rd)}
+.dv.good{color:var(--gr)}
+.cw{flex:1;display:flex;flex-direction:column;max-width:680px;width:100%;margin:0 auto;padding:14px 0}
+.cb{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:10px;margin-bottom:12px}
+.cm{padding:9px 13px;border-radius:12px;font-size:13px;line-height:1.6;max-width:82%}
+.cm.user{align-self:flex-end;background:var(--bl);border:1px solid var(--bl)}
+.cm.agent{align-self:flex-start;background:var(--s);border:1px solid var(--bd)}
+.cr{display:flex;gap:8px}
+.ci{flex:1;background:var(--s);border:1px solid var(--bd);border-radius:8px;padding:9px 13px;color:var(--tx);font-size:13px;outline:none}
+.ci:focus{border-color:var(--bl)}
+.cs{background:var(--bl);border:none;color:#fff;border-radius:8px;padding:9px 16px;font-size:13px;cursor:pointer}
+.em{display:flex;flex-direction:column;align-items:center;justify-content:center;height:180px;color:var(--tm);font-size:13px;gap:6px}
+.eic{font-size:36px;opacity:.25}
+.ld{display:flex;align-items:center;justify-content:center;gap:8px;padding:20px;color:var(--tm);font-size:13px}
+.lsp{width:16px;height:16px;border:2px solid var(--bd);border-top-color:var(--bl);border-radius:50%;animation:sp .8s linear infinite}
+</style>
 </head>
 <body>
 
-<header>
+<div class="hh">
   <h1>OpsMind</h1>
   <span class="tag">AI 诊断</span>
-  <div class="header-right">
-    <div class="status-dot" id="dot"></div>
-    <span class="status-text" id="statusTx">检测中...</span>
-    <button class="refresh-btn" id="refreshBtn">刷新</button>
-  </div>
-</header>
-
-<!-- Stats summary bar -->
-<div class="stats-bar" id="statsBar">
-  <div class="stat-item stat-total active" data-filter="all" onclick="setAlertFilter('all')">
-    <span class="stat-num" id="statTotal">-</span>
-    <span class="stat-label">全部</span>
-  </div>
-  <div class="stat-item stat-critical" data-filter="critical" onclick="setAlertFilter('critical')">
-    <span class="stat-num" id="statCrit">-</span>
-    <span class="stat-label">严重</span>
-  </div>
-  <div class="stat-item stat-high" data-filter="high" onclick="setAlertFilter('high')">
-    <span class="stat-num" id="statHigh">-</span>
-    <span class="stat-label">高</span>
-  </div>
-  <div class="stat-item stat-medium" data-filter="medium" onclick="setAlertFilter('medium')">
-    <span class="stat-num" id="statMed">-</span>
-    <span class="stat-label">中</span>
-  </div>
-  <div class="stat-item stat-low" data-filter="low" onclick="setAlertFilter('low')">
-    <span class="stat-num" id="statLow">-</span>
-    <span class="stat-label">低</span>
-  </div>
-  <div class="stat-item stat-resolved" data-filter="resolved" onclick="setAlertFilter('resolved')">
-    <span class="stat-num" id="statRes">-</span>
-    <span class="stat-label">已解决</span>
+  <div class="hr">
+    <div class="dot" id="dot"></div>
+    <span class="tx" id="stx">检测中...</span>
+    <button class="rb" id="rfbtn">刷新</button>
   </div>
 </div>
 
-<div class="tabs">
-  <div class="tab active" id="tab-alerts">告警列表 <span class="tab-badge" id="cntAlerts">0</span></div>
-  <div class="tab" id="tab-kb">知识库 <span class="tab-badge blue" id="cntKb">3</span></div>
-  <div class="tab" id="tab-chat">AI 对话</div>
+<div class="sb" id="sbar">
+  <div class="si ac" data-sev="all" id="si-all" onclick="API.setFilter('all')">
+    <span class="sn" id="sn-total">-</span><span class="tx">全部</span>
+  </div>
+  <div class="si" data-sev="crit" onclick="API.setFilter('critical')">
+    <span class="sn" id="sn-crit">-</span><span class="tx">严重</span>
+  </div>
+  <div class="si" data-sev="high" onclick="API.setFilter('high')">
+    <span class="sn" id="sn-high">-</span><span class="tx">高</span>
+  </div>
+  <div class="si" data-sev="med" onclick="API.setFilter('medium')">
+    <span class="sn" id="sn-med">-</span><span class="tx">中</span>
+  </div>
+  <div class="si" data-sev="low" onclick="API.setFilter('low')">
+    <span class="sn" id="sn-low">-</span><span class="tx">低</span>
+  </div>
+  <div class="si" data-sev="res" onclick="API.setFilter('resolved')">
+    <span class="sn" id="sn-res">-</span><span class="tx">已解决</span>
+  </div>
 </div>
 
-<!-- Filter bar -->
-<div class="filter-bar" id="filterBar">
-  <div class="filter-group">
-    <span class="filter-label">级别</span>
-    <select class="filter-select" id="fSev">
-      <option value="all">全部</option>
-      <option value="critical">严重</option>
-      <option value="high">高</option>
-      <option value="medium">中</option>
-      <option value="low">低</option>
-    </select>
-  </div>
-  <div class="filter-group">
-    <span class="filter-label">状态</span>
-    <select class="filter-select" id="fStatus">
-      <option value="all">全部</option>
-      <option value="pending">等待</option>
-      <option value="diagnosing">诊断中</option>
-      <option value="resolved">已解决</option>
-      <option value="error">异常</option>
-    </select>
-  </div>
-  <div class="filter-group">
-    <span class="filter-label">时间</span>
-    <input class="filter-input" type="date" id="fStart" placeholder="开始">
-    <span style="color:var(--text-muted)">~</span>
-    <input class="filter-input" type="date" id="fEnd" placeholder="结束">
-  </div>
-  <div class="filter-group">
-    <span class="filter-label">指标</span>
-    <input class="filter-input" type="text" id="fMetric" placeholder="搜索指标名...">
-  </div>
-  <button class="filter-btn" onclick="applyFilter()">筛选</button>
-  <button class="filter-btn clear" onclick="clearFilter()">重置</button>
-  <button class="filter-btn export" onclick="exportCsv()">⬇ 导出 CSV</button>
+<div class="tb">
+  <div class="tab ac" id="tab-alerts" onclick="API.tab('alerts')">告警列表 <b id="cnt">0</b></div>
+  <div class="tab" id="tab-kb" onclick="API.tab('kb')">知识库 <b id="kcnt">3</b></div>
+  <div class="tab" id="tab-chat" onclick="API.tab('chat')">AI 对话</div>
 </div>
 
-<div class="main">
-  <div class="panel" id="panel-alerts"></div>
-  <div class="panel" id="panel-kb" style="display:none"></div>
-  <div class="panel" id="panel-chat" style="display:none;padding:0 20px;">
-    <div class="chat-wrap">
-      <div class="chat-box" id="chatBox"></div>
-      <div class="chat-input-row">
-        <input class="chat-input" id="chatInput" placeholder="描述告警现象，例如：Pod nginx CPU 99%" onkeydown="if(event.keyCode===13&&!event.shiftKey){event.preventDefault();window.sendMsg()}">
-        <button class="chat-send" onclick="window.sendMsg()">发送</button>
+<div class="tb2" id="ftbar">
+  <span class="tx">级别</span>
+  <select class="sel" id="f-sev"><option value="all">全部</option><option value="critical">严重</option><option value="high">高</option><option value="medium">中</option><option value="low">低</option></select>
+  <span class="tx">状态</span>
+  <select class="sel" id="f-sta"><option value="all">全部</option><option value="pending">等待</option><option value="diagnosing">诊断中</option><option value="resolved">已解决</option><option value="error">异常</option></select>
+  <span class="tx">时间</span>
+  <input class="in" type="date" id="f-st">
+  <span class="tx">~</span>
+  <input class="in" type="date" id="f-et">
+  <span class="tx">指标</span>
+  <input class="in" type="text" id="f-m" placeholder="搜索...">
+  <button class="btn" onclick="API.applyFilt()">筛选</button>
+  <button class="btn2" onclick="API.clearFilt()">重置</button>
+  <button class="btn2" onclick="API.exportCsv()">导出 CSV</button>
+</div>
+
+<div class="mn">
+  <div class="pn" id="pn-alerts"></div>
+  <div class="pn2" id="pn-kb" style="display:none"></div>
+  <div class="pn2" id="pn-chat" style="display:none;padding-top:14px">
+    <div class="cw">
+      <div class="cb" id="chat-box"></div>
+      <div class="cr">
+        <input class="ci" id="chat-in" placeholder="描述告警现象..." onkeydown="if(event.keyCode===13&&!event.shiftKey){event.preventDefault();API.sendMsg()}">
+        <button class="cs" onclick="API.sendMsg()">发送</button>
       </div>
     </div>
   </div>
 </div>
 
-<!-- Pagination -->
-<div class="pagination" id="pagination"></div>
+<div class="pg" id="pgn"></div>
 
-<div class="demo-panel">
-  <div class="demo-title">&#x1F916; 模拟告警触发</div>
-  <div class="demo-buttons">
-    <button class="demo-btn cpu" id="btnCpu">&#x1F525; CPU 异常</button>
-    <button class="demo-btn mem" id="btnMem">&#x1F4BE; 内存泄漏</button>
-    <button class="demo-btn" id="btnLat">&#x23F1; 延迟飙升</button>
-    <button class="demo-btn ok" id="btnOk">&#x2705; 恢复正常</button>
+<div class="dp">
+  <div class="dt">模拟告警触发</div>
+  <div class="db">
+    <button class="db2 cpu" id="btn-cpu" onclick="API.demo('cpu-spike')">CPU 异常</button>
+    <button class="db2 mem" id="btn-mem" onclick="API.demo('memory-leak')">内存泄漏</button>
+    <button class="db2" id="btn-lat" onclick="API.demo('latency-spike')">延迟飙升</button>
+    <button class="db2 ok" id="btn-ok" onclick="API.demo('resolve')">恢复正常</button>
   </div>
-  <div class="demo-status" id="demoStatus">
-    <span>请求: <span class="dval" id="sReq">-</span></span>
-    <span>活跃: <span class="dval" id="sConn">-</span></span>
-    <span>错误: <span class="dval" id="sErr">-</span></span>
-    <span>CPU: <span class="dval" id="sCpu">-</span></span>
-    <span>内存: <span class="dval" id="sMem">-</span></span>
+  <div class="ds">
+    <span>请求: <b class="dv" id="dv-req">-</b></span>
+    <span>活跃: <b class="dv" id="dv-conn">-</b></span>
+    <span>错误: <b class="dv" id="dv-err">-</b></span>
+    <span>CPU: <b class="dv good" id="dv-cpu">-</b></span>
+    <span>内存: <b class="dv good" id="dv-mem">-</b></span>
   </div>
 </div>
 
 <script>
 (function() {
+  // ── State ───────────────────────────────────────────
   var curTab = 'alerts';
-  var chatHist = [];
-  var currentPage = 1;
-  var currentFilters = { severity: 'all', status: 'all', startTime: '', endTime: '', metricName: '' };
+  var curPage = 1;
+  var curFilter = { sev: 'all', sta: 'all', st: '', et: '', m: '' };
+  var chatH = [];
 
-  // ── Init ──────────────────────────────────────────────
-  fetch('/api/health').then(function(r){return r.json();}).then(function(){
-    document.getElementById('dot').className = 'status-dot ok';
-    document.getElementById('statusTx').textContent = '服务正常';
-  }).catch(function(){
-    document.getElementById('dot').className = 'status-dot error';
-    document.getElementById('statusTx').textContent = '服务离线';
+  // ── Init ─────────────────────────────────────────────
+  fetch('/api/health').then(function(r) { return r.json(); }).then(function() {
+    G('dot').className = 'dot ok';
+    G('stx').textContent = '服务正常';
+  }).catch(function() {
+    G('dot').className = 'dot er';
+    G('stx').textContent = '服务离线';
   });
 
-  document.getElementById('tab-alerts').addEventListener('click', function(){ setTab('alerts'); });
-  document.getElementById('tab-kb').addEventListener('click', function(){ setTab('kb'); });
-  document.getElementById('tab-chat').addEventListener('click', function(){ setTab('chat'); });
-  document.getElementById('refreshBtn').addEventListener('click', function(){ loadAlerts(); loadSummary(); loadStatus(); });
-  document.getElementById('btnCpu').addEventListener('click', function(){ demo('cpu-spike'); });
-  document.getElementById('btnMem').addEventListener('click', function(){ demo('memory-leak'); });
-  document.getElementById('btnLat').addEventListener('click', function(){ demo('latency-spike'); });
-  document.getElementById('btnOk').addEventListener('click', function(){ demo('resolve'); });
+  G('rfbtn').onclick = function() { loadAlerts(); loadSum(); loadDSt(); };
 
   // ── Tab ──────────────────────────────────────────────
-  function setTab(tab) {
-    var tabs = document.querySelectorAll('.tab');
-    for (var i = 0; i < tabs.length; i++) tabs[i].classList.remove('active');
-    document.getElementById('tab-' + tab).classList.add('active');
-    document.getElementById('panel-alerts').style.display = tab === 'alerts' ? '' : 'none';
-    document.getElementById('panel-kb').style.display = tab === 'kb' ? '' : 'none';
-    document.getElementById('panel-chat').style.display = tab === 'chat' ? '' : 'none';
-    document.getElementById('pagination').style.display = tab === 'alerts' ? '' : 'none';
-    document.getElementById('filterBar').style.display = tab === 'alerts' ? '' : 'none';
-    document.getElementById('statsBar').style.display = tab === 'alerts' ? '' : 'none';
-    curTab = tab;
-    if (tab === 'alerts') { currentPage = 1; loadAlerts(); loadSummary(); }
-    if (tab === 'kb') loadKb();
+  window.API = {
+    tab: function(t) {
+      var ts = Q('.tab');
+      for (var i = 0; i < ts.length; i++) ts[i].classList.remove('ac');
+      G('tab-' + t).classList.add('ac');
+      G('pn-alerts').style.display = t === 'alerts' ? '' : 'none';
+      G('pn-kb').style.display = t === 'kb' ? '' : 'none';
+      G('pn-chat').style.display = t === 'chat' ? '' : 'none';
+      G('ftbar').style.display = t === 'alerts' ? '' : 'none';
+      G('sbar').style.display = t === 'alerts' ? '' : 'none';
+      G('pgn').style.display = t === 'alerts' ? '' : 'none';
+      curTab = t;
+      if (t === 'alerts') { curPage = 1; loadAlerts(); }
+      if (t === 'kb') loadKb();
+    },
+
+    setFilter: function(sev) {
+      curFilter.sev = sev;
+      G('f-sev').value = sev === 'all' ? 'all' : sev;
+      var sis = Q('.si');
+      for (var i = 0; i < sis.length; i++) {
+        sis[i].classList.remove('ac');
+        if (sis[i].getAttribute('data-sev') === (sev === 'all' ? 'all' : sev)) sis[i].classList.add('ac');
+      }
+      curPage = 1;
+      loadAlerts();
+    },
+
+    applyFilt: function() {
+      curFilter.sev = G('f-sev').value;
+      curFilter.sta = G('f-sta').value;
+      curFilter.st = G('f-st').value;
+      curFilter.et = G('f-et').value;
+      curFilter.m = G('f-m').value.trim();
+      curPage = 1;
+      loadAlerts();
+    },
+
+    clearFilt: function() {
+      G('f-sev').value = 'all';
+      G('f-sta').value = 'all';
+      G('f-st').value = '';
+      G('f-et').value = '';
+      G('f-m').value = '';
+      curFilter = { sev: 'all', sta: 'all', st: '', et: '', m: '' };
+      var sis = Q('.si');
+      for (var i = 0; i < sis.length; i++) sis[i].classList.remove('ac');
+      G('si-all').classList.add('ac');
+      curPage = 1;
+      loadAlerts();
+    },
+
+    exportCsv: function() {
+      var p = '?';
+      if (curFilter.sev !== 'all') p += 'severity=' + curFilter.sev + '&';
+      if (curFilter.sta !== 'all') p += 'status=' + curFilter.sta + '&';
+      if (curFilter.st) p += 'startTime=' + curFilter.st + ' 00:00:00&';
+      if (curFilter.et) p += 'endTime=' + curFilter.et + ' 23:59:59&';
+      window.open('/api/alerts/export' + p, '_blank');
+    },
+
+    demo: function(a) {
+      var url = a === 'resolve' ? '/api/demo/resolve' : '/api/demo/' + a;
+      var b = G({ 'cpu-spike': 'btn-cpu', 'memory-leak': 'btn-mem', 'latency-spike': 'btn-lat', 'resolve': 'btn-ok' }[a]);
+      var ot = b ? b.textContent : '';
+      if (b) { b.textContent = '...'; b.style.opacity = '0.6'; }
+      fetch(url).then(function(r) { return r.json(); }).then(function() {
+        if (b) { b.textContent = ot; b.style.opacity = '1'; }
+        loadDSt();
+        if (a !== 'resolve') { API.tab('alerts'); setTimeout(function() { loadAlerts(); loadSum(); }, 2500); }
+        else { setTimeout(function() { loadAlerts(); loadSum(); }, 500); }
+      }).catch(function() { if (b) { b.textContent = ot; b.style.opacity = '1'; } });
+    },
+
+    sendMsg: function() {
+      var inp = G('chat-in');
+      var t = inp.value.trim();
+      if (!t) return;
+      inp.value = '';
+      chatH.push({ r: 'user', c: t });
+      rndChat();
+      var ld = document.createElement('div');
+      ld.className = 'cm agent';
+      ld.textContent = 'AI 诊断中...';
+      G('chat-box').appendChild(ld);
+      G('chat-box').lastElementChild.scrollIntoView();
+      fetch('/api/diagnosis', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ input: t }) })
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+          ld.textContent = d.conclusion || '无结论';
+          chatH.push({ r: 'agent', c: d.conclusion || '无结论' });
+          rndChat();
+          setTimeout(function() { loadAlerts(); loadSum(); }, 2000);
+        })
+        .catch(function(e) { ld.textContent = '失败: ' + e.message; });
+    }
+  };
+
+  // ── Helpers ─────────────────────────────────────────
+  function G(id) { return typeof id === 'string' ? document.getElementById(id) : id; }
+  function Q(s) { return document.querySelectorAll(s); }
+  function E(s) { return s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function FV(v) { return v == null ? '-' : (typeof v === 'number' ? (v > 100 ? v.toFixed(0) : v.toFixed(2)) : v); }
+  function TAgo(ts) {
+    if (!ts) return '-';
+    var d = new Date(ts), diff = Math.floor((Date.now() - d) / 1000);
+    if (diff < 60) return diff + '秒前';
+    if (diff < 3600) return Math.floor(diff / 60) + '分钟前';
+    if (diff < 86400) return Math.floor(diff / 3600) + '小时前';
+    return d.toLocaleDateString('zh-CN');
+  }
+  function SL(s) { return { pending: '等待', diagnosing: 'AI诊断中...', resolved: '已解决', error: '异常' }[s] || '等待'; }
+  function fmtDiag(t) {
+    return E(t).replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/`([^`]+)`/g, '<pre style="font-size:11px;background:#0f1117;padding:5px;border-radius:4px;overflow-x:auto">$1</pre>').replace(/\n/g, '<br>');
   }
 
-  // expose to window for debugging / inline handlers
-  window.setTab = setTab;
-  window.loadAlerts = loadAlerts;
-  window.loadKb = loadKb;
-  window.loadSummary = loadSummary;
-  window.goPage = goPage;
-  window.applyFilter = applyFilter;
-  window.clearFilter = clearFilter;
-  window.exportCsv = exportCsv;
-
-
-  // ── Load alerts (paginated) ────────────────────────────
+  // ── Load alerts ───────────────────────────────────────
   function loadAlerts() {
-    var panel = document.getElementById('panel-alerts');
-    panel.innerHTML = '<div class="loading-row"><div class="loading-spinner"></div>加载中...</div>';
-
-    var params = 'page=' + currentPage + '&pageSize=20';
-    if (currentFilters.severity && currentFilters.severity !== 'all') params += '&severity=' + currentFilters.severity;
-    if (currentFilters.status && currentFilters.status !== 'all') params += '&status=' + currentFilters.status;
-    if (currentFilters.metricName) params += '&metricName=' + encodeURIComponent(currentFilters.metricName);
-    if (currentFilters.startTime) params += '&startTime=' + currentFilters.startTime + ' 00:00:00';
-    if (currentFilters.endTime) params += '&endTime=' + currentFilters.endTime + ' 23:59:59';
-
-    fetch('/api/alerts?' + params).then(function(r){return r.json();}).then(function(d){
-      var alerts = d.alerts || [];
-      document.getElementById('cntAlerts').textContent = d.total || 0;
-      if (!alerts.length) {
-        panel.innerHTML = '<div class="empty"><div class="empty-ic">&#x1F6E1;</div><div>暂无告警</div></div>';
-        renderPagination(d.page, d.totalPages, d.total);
-        return;
-      }
+    G('pn-alerts').innerHTML = '<div class="ld"><div class="lsp"></div>加载中...</div>';
+    var p = '/api/alerts?page=' + curPage + '&pageSize=20';
+    if (curFilter.sev !== 'all') p += '&severity=' + curFilter.sev;
+    if (curFilter.sta !== 'all') p += '&status=' + curFilter.sta;
+    if (curFilter.m) p += '&metricName=' + encodeURIComponent(curFilter.m);
+    if (curFilter.st) p += '&startTime=' + curFilter.st + ' 00:00:00';
+    if (curFilter.et) p += '&endTime=' + curFilter.et + ' 23:59:59';
+    fetch(p).then(function(r) { return r.json(); }).then(function(d) {
+      var as = d.alerts || [];
+      G('cnt').textContent = d.total || 0;
+      if (!as.length) { G('pn-alerts').innerHTML = '<div class="em"><div class="eic">&#x1F6E1;</div><div>暂无告警</div></div>'; rndPgn(d.page, d.totalPages, d.total); return; }
       var h = '';
-      for (var i = 0; i < alerts.length; i++) {
-        var a = alerts[i];
-        var diag = a.diagnosis || '';
-        var diagH = diag ? '<div class="diagnosis"><div class="diag-label">AI 诊断</div><div>' + fmtDiag(diag) + '</div></div>' : '';
-        var spin = a.status === 'diagnosing' ? '<div class="spinner"></div>' : '';
-        var fsClass = a.notified ? 'feishu-ok' : 'feishu-fail';
-        var fsTxt = a.notified ? '&#x2713; 飞书' : '&#x2717; 未推';
-        var dur = a.diagnosisDurationMs ? '<span>' + (a.diagnosisDurationMs/1000).toFixed(1) + 's</span>' : '';
-        h += '<div class="alert-card ' + esc(a.severity||'low') + ' ' + esc(a.status||'') + '">' +
-          '<div class="alert-header">' +
-            '<span class="sev-badge sev-' + esc(a.severity||'low') + '">' + sevLbl(a.severity) + '</span>' +
-            '<span class="alert-name">' + esc(a.alertName||'未知') + '</span>' +
-            '<span class="alert-time">' + timeAgo(a.triggeredAt) + '</span>' +
+      for (var i = 0; i < as.length; i++) {
+        var a = as[i];
+        var dg = a.diagnosis || '';
+        var sp = a.status === 'diagnosing' ? '<div class="spin"></div>' : '';
+        var fs = a.notified ? '<span class="fok">&#x2713; 飞书</span>' : '<span class="ff">&#x2717; 未推</span>';
+        var dur = a.diagnosisDurationMs ? '<span>' + (a.diagnosisDurationMs / 1000).toFixed(1) + 's</span>' : '';
+        var svcls = { critical: 'c', high: 'h', medium: 'm', low: 'l' }[a.severity] || 'l';
+        h += '<div class="ac ' + E(a.severity||'low') + ' ' + E(a.status||'') + '">' +
+          '<div class="ah">' +
+            '<span class="bd ' + svcls + '">' + ({ critical:'CRIT', high:'HIGH', medium:'MED', low:'LOW' }[a.severity]||'LOW') + '</span>' +
+            '<span class="an">' + E(a.alertName||'未知') + '</span>' +
+            '<span class="at">' + TAgo(a.triggeredAt) + '</span>' +
           '</div>' +
-          '<div class="alert-metrics">' +
-            '<span>指标 <span class="mval">' + esc(a.metricName||'-') + '</span></span>' +
-            '<span>值 <span class="mval">' + fmt(a.metricValue) + '</span></span>' +
-            '<span>阈值 <span class="mval">' + esc(a.condition||'?') + fmt(a.thresholdValue) + '</span></span>' +
+          '<div class="am">' +
+            '<span>指标 <b class="mv">' + E(a.metricName||'-') + '</b></span>' +
+            '<span>值 <b class="mv">' + FV(a.metricValue) + '</b></span>' +
+            '<span>阈值 <b class="mv">' + E(a.condition||'?') + FV(a.thresholdValue) + '</b></span>' +
           '</div>' +
-          diagH +
-          '<div class="diag-footer">' +
-            spin +
-            '<span>' + stLbl(a.status) + '</span>' +
-            dur +
-            '<span style="margin-left:auto" class="' + fsClass + '">' + fsTxt + '</span>' +
-          '</div>' +
+          (dg ? '<div class="dg"><div class="dl">AI 诊断</div><div>' + fmtDiag(dg) + '</div></div>' : '') +
+          '<div class="df">' + sp + '<span>' + SL(a.status) + '</span>' + dur + '<span style="margin-left:auto">' + fs + '</span></div>' +
         '</div>';
       }
-      panel.innerHTML = h;
-      renderPagination(d.page, d.totalPages, d.total);
-    }).catch(function(e){
-      panel.innerHTML = '<div class="empty"><div>加载失败: ' + esc(e.message) + '</div></div>';
-    });
+      G('pn-alerts').innerHTML = h;
+      rndPgn(d.page, d.totalPages, d.total);
+    }).catch(function(e) { G('pn-alerts').innerHTML = '<div class="em"><div>加载失败: ' + E(e.message) + '</div></div>'; });
   }
 
-  function renderPagination(page, totalPages, total) {
-    var pg = document.getElementById('pagination');
-    if (totalPages <= 1) { pg.innerHTML = '<span class="page-info">共 ' + total + ' 条</span>'; return; }
-    var h = '';
-    h += '<button class="page-btn' + (page <= 1 ? ' disabled' : '') + '" onclick="goPage(' + (page-1) + ')">上一页</button>';
-    var start = Math.max(1, page - 2);
-    var end = Math.min(totalPages, page + 2);
-    if (start > 1) { h += '<button class="page-btn" onclick="goPage(1)">1</button>'; if (start > 2) h += '<span style="color:var(--text-muted)">...</span>'; }
-    for (var i = start; i <= end; i++) {
-      h += '<button class="page-btn' + (i === page ? '" style="background:var(--blue);border-color:var(--blue)"' : '"') + ' onclick="goPage(' + i + ')">' + i + '</button>';
-    }
-    if (end < totalPages) { if (end < totalPages - 1) h += '<span style="color:var(--text-muted)">...</span>'; h += '<button class="page-btn" onclick="goPage(' + totalPages + ')">' + totalPages + '</button>'; }
-    h += '<button class="page-btn' + (page >= totalPages ? ' disabled' : '') + '" onclick="goPage(' + (page+1) + ')">下一页</button>';
-    h += '<span class="page-info">第 ' + page + '/' + totalPages + ' 页，共 ' + total + ' 条</span>';
+  function rndPgn(page, tp, total) {
+    var pg = G('pgn');
+    if (tp <= 1) { pg.innerHTML = '<span class="pinfo">共 ' + total + ' 条</span>'; return; }
+    var h = '<button class="pbtn' + (page <= 1 ? ' di' : '') + '" onclick="API.gop(' + (page - 1) + ')">上一页</button>';
+    var st = Math.max(1, page - 2), en = Math.min(tp, page + 2);
+    if (st > 1) { h += '<button class="pbtn" onclick="API.gop(1)">1</button>'; if (st > 2) h += '<span class="pinfo">...</span>'; }
+    for (var i = st; i <= en; i++) h += '<button class="pbtn' + (i === page ? '" style="background:var(--bl);border-color:var(--bl)"' : '"') + ' onclick="API.gop(' + i + ')">' + i + '</button>';
+    if (en < tp) { if (en < tp - 1) h += '<span class="pinfo">...</span>'; h += '<button class="pbtn" onclick="API.gop(' + tp + ')">' + tp + '</button>'; }
+    h += '<button class="pbtn' + (page >= tp ? ' di' : '') + '" onclick="API.gop(' + (page + 1) + ')">下一页</button>';
+    h += '<span class="pinfo">第 ' + page + '/' + tp + ' 页，共 ' + total + ' 条</span>';
     pg.innerHTML = h;
   }
 
-  window.goPage = function(p) { currentPage = p; loadAlerts(); };
+  window.API.gop = function(p) { curPage = p; loadAlerts(); };
 
-  // ── Summary stats ─────────────────────────────────────
-  function loadSummary() {
-    fetch('/api/alerts/summary').then(function(r){return r.json();}).then(function(d){
-      document.getElementById('statTotal').textContent = d.total || 0;
-      document.getElementById('statCrit').textContent = d.critical || 0;
-      document.getElementById('statHigh').textContent = d.high || 0;
-      document.getElementById('statMed').textContent = d.medium || 0;
-      document.getElementById('statLow').textContent = d.low || 0;
-      document.getElementById('statRes').textContent = d.resolved || 0;
+  // ── Summary ──────────────────────────────────────────
+  function loadSum() {
+    fetch('/api/alerts/summary').then(function(r) { return r.json(); }).then(function(d) {
+      G('sn-total').textContent = d.total || 0;
+      G('sn-crit').textContent = d.critical || 0;
+      G('sn-high').textContent = d.high || 0;
+      G('sn-med').textContent = d.medium || 0;
+      G('sn-low').textContent = d.low || 0;
+      G('sn-res').textContent = d.resolved || 0;
     });
   }
 
-  window.setAlertFilter = function(sev) {
-    if (sev === 'all') {
-      document.getElementById('fSev').value = 'all';
-      currentFilters.severity = 'all';
-    } else {
-      document.getElementById('fSev').value = sev;
-      currentFilters.severity = sev;
-    }
-    currentPage = 1;
-    loadAlerts();
-    // highlight active stat
-    var items = document.querySelectorAll('.stat-item');
-    for (var i = 0; i < items.length; i++) {
-      items[i].classList.remove('active');
-      if (items[i].getAttribute('data-filter') === (sev === 'all' ? 'all' : sev)) {
-        items[i].classList.add('active');
-      }
-    }
-  };
-
-  // ── Filter ─────────────────────────────────────────────
-  window.applyFilter = function() {
-    currentFilters.severity = document.getElementById('fSev').value;
-    currentFilters.status = document.getElementById('fStatus').value;
-    currentFilters.metricName = document.getElementById('fMetric').value.trim();
-    currentFilters.startTime = document.getElementById('fStart').value;
-    currentFilters.endTime = document.getElementById('fEnd').value;
-    currentPage = 1;
-    loadAlerts();
-  };
-
-  window.clearFilter = function() {
-    document.getElementById('fSev').value = 'all';
-    document.getElementById('fStatus').value = 'all';
-    document.getElementById('fMetric').value = '';
-    document.getElementById('fStart').value = '';
-    document.getElementById('fEnd').value = '';
-    currentFilters = { severity: 'all', status: 'all', startTime: '', endTime: '', metricName: '' };
-    currentPage = 1;
-    loadAlerts();
-    // reset stat highlights
-    var items = document.querySelectorAll('.stat-item');
-    for (var i = 0; i < items.length; i++) {
-      items[i].classList.remove('active');
-      if (items[i].getAttribute('data-filter') === 'all') items[i].classList.add('active');
-    }
-  };
-
-  // ── Export CSV ─────────────────────────────────────────
-  window.exportCsv = function() {
-    var params = '?';
-    if (currentFilters.severity && currentFilters.severity !== 'all') params += 'severity=' + currentFilters.severity + '&';
-    if (currentFilters.status && currentFilters.status !== 'all') params += 'status=' + currentFilters.status + '&';
-    if (currentFilters.startTime) params += 'startTime=' + currentFilters.startTime + ' 00:00:00&';
-    if (currentFilters.endTime) params += 'endTime=' + currentFilters.endTime + ' 23:59:59&';
-    window.open('/api/alerts/export' + params, '_blank');
-  };
-
-  // ── Helpers ─────────────────────────────────────────────
-  function fmtDiag(t) {
-    return esc(t).replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>').replace(/`([^`]+)`/g,'<pre style="font-size:11px;background:#0f1117;padding:5px;border-radius:4px;overflow-x:auto">$1</pre>').replace(/\n/g,'<br>');
+  // ── Demo status ───────────────────────────────────────
+  function loadDSt() {
+    fetch('/api/demo/status').then(function(r) { return r.json(); }).then(function(d) {
+      function sv(id, v, cls) { var e = G(id); if (e) { e.textContent = v; e.className = 'dv' + (cls ? ' ' + cls : ''); } }
+      sv('dv-req', d.requestCount || 0);
+      sv('dv-conn', d.activeConnections || 0);
+      sv('dv-err', d.errorCount || 0);
+      sv('dv-cpu', d.cpuSpike ? '异常' : '正常', d.cpuSpike ? 'warn' : 'good');
+      sv('dv-mem', d.memoryLeak ? '泄漏' : '正常', d.memoryLeak ? 'bad' : 'good');
+    });
   }
-  function sevLbl(s) { return {critical:'CRIT',high:'HIGH',medium:'MED',low:'LOW'}[s]||'LOW'; }
-  function stLbl(s) { return {pending:'等待',diagnosing:'AI诊断中...',resolved:'已解决',error:'异常'}[s]||'等待'; }
-  function timeAgo(ts) {
-    if (!ts) return '-';
-    var d = new Date(ts);
-    var diff = Math.floor((Date.now() - d) / 1000);
-    if (diff < 60) return diff + '秒前';
-    if (diff < 3600) return Math.floor(diff/60) + '分钟前';
-    if (diff < 86400) return Math.floor(diff/3600) + '小时前';
-    return d.toLocaleDateString('zh-CN');
-  }
-  function fmt(v) { return v == null ? '-' : (typeof v === 'number' ? (v > 100 ? v.toFixed(0) : v.toFixed(2)) : v); }
-  function esc(s) { return s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
-  // ── Knowledge base ─────────────────────────────────────
+  // ── Knowledge base ───────────────────────────────────
   function loadKb() {
-    fetch('/api/kb').then(function(r){return r.json();}).then(function(d){
-      var cases = d.cases || [];
-      document.getElementById('cntKb').textContent = cases.length;
-      var panel = document.getElementById('panel-kb');
-      if (!cases.length) {
-        panel.innerHTML = '<div class="empty"><div class="empty-ic">&#x1F4DA;</div><div>暂无案例</div></div>';
-        return;
-      }
+    fetch('/api/kb').then(function(r) { return r.json(); }).then(function(d) {
+      var cs = d.cases || [];
+      G('kcnt').textContent = cs.length;
+      if (!cs.length) { G('pn-kb').innerHTML = '<div class="em"><div class="eic">&#x1F4DA;</div><div>暂无案例</div></div>'; return; }
       var h = '';
-      for (var i = 0; i < cases.length; i++) {
-        var c = cases[i];
-        var steps = (c.solutionSteps||'').split('\n').filter(function(s){return s && s.trim();});
-        var stepsH = '';
-        for (var j = 0; j < steps.length; j++) { stepsH += '<div>&#x2022; ' + esc(steps[j].trim()) + '</div>'; }
-        h += '<div class="kb-case">' +
-          '<div class="kb-feature">' + esc(c.alertFeatures||'') + '</div>' +
-          '<div class="kb-cause">&#x1F914; ' + esc(c.rootCause||'') + '</div>' +
-          '<div class="kb-steps">' + stepsH + '</div>' +
-          '<div class="kb-meta"><span>ID: ' + esc(c.id||'') + '</span><span>' + esc(c.createdAt||'') + '</span><span class="kb-ok">&#x2713; ' + esc(c.result||'') + '</span></div>' +
+      for (var i = 0; i < cs.length; i++) {
+        var c = cs[i];
+        var steps = (c.solutionSteps || '').split('\n').filter(function(s) { return s && s.trim(); });
+        var sh = '';
+        for (var j = 0; j < steps.length; j++) sh += '<div>&#x2022; ' + E(steps[j].trim()) + '</div>';
+        h += '<div class="kc">' +
+          '<div class="kf">' + E(c.alertFeatures||'') + '</div>' +
+          '<div class="kcau">&#x1F914; ' + E(c.rootCause||'') + '</div>' +
+          '<div class="kst">' + sh + '</div>' +
+          '<div class="kmeta"><span>ID: ' + E(c.id||'') + '</span><span>' + E(c.createdAt||'') + '</span><span class="kok">&#x2713; ' + E(c.result||'') + '</span></div>' +
         '</div>';
       }
-      panel.innerHTML = h;
-    }).catch(function(e){
-      document.getElementById('panel-kb').innerHTML = '<div class="empty"><div>加载失败: ' + esc(e.message) + '</div></div>';
-    });
+      G('pn-kb').innerHTML = h;
+    }).catch(function(e) { G('pn-kb').innerHTML = '<div class="em"><div>加载失败: ' + E(e.message) + '</div></div>'; });
   }
 
-  // ── Chat ──────────────────────────────────────────────
-  window.sendMsg = function() {
-    var inp = document.getElementById('chatInput');
-    var text = inp.value.trim();
-    if (!text) return;
-    inp.value = '';
-    chatHist.push({role:'user', content: text});
-    renderChat();
-    var loading = document.createElement('div');
-    loading.className = 'chat-msg chat-agent';
-    loading.textContent = 'AI 诊断中...';
-    document.getElementById('chatBox').appendChild(loading);
-    document.getElementById('chatBox').lastElementChild.scrollIntoView();
-    fetch('/api/diagnosis', {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({input: text})
-    }).then(function(r){return r.json();}).then(function(d){
-      loading.textContent = d.conclusion || '无结论';
-      chatHist.push({role:'agent', content: d.conclusion || '无结论'});
-      renderChat();
-      setTimeout(function(){ loadAlerts(); loadSummary(); }, 2000);
-    }).catch(function(e){
-      loading.textContent = '请求失败: ' + e.message;
-    });
-  };
-
-  function renderChat() {
-    var box = document.getElementById('chatBox');
+  // ── Chat ─────────────────────────────────────────────
+  function rndChat() {
+    var box = G('chat-box');
     var h = '';
-    for (var i = 0; i < chatHist.length; i++) {
-      var m = chatHist[i];
-      var cls = m.role === 'user' ? 'chat-user' : 'chat-agent';
-      h += '<div class="chat-msg ' + cls + '">' + fmtDiag(m.content) + '</div>';
+    for (var i = 0; i < chatH.length; i++) {
+      var m = chatH[i];
+      h += '<div class="cm ' + (m.r === 'user' ? 'user' : 'agent') + '">' + fmtDiag(m.c) + '</div>';
     }
-    // append loading div if exists
-    var last = box.lastElementChild;
-    if (last && last.textContent === 'AI 诊断中...') {
-      box.innerHTML = h;
-      box.appendChild(last);
-    } else {
-      box.innerHTML = h;
-    }
+    var ld = box.lastElementChild;
+    box.innerHTML = h;
+    if (ld && ld.textContent === 'AI 诊断中...') box.appendChild(ld);
     box.lastElementChild && box.lastElementChild.scrollIntoView();
   }
 
-  // ── Demo ──────────────────────────────────────────────
-  window.demo = function(action) {
-    var url = action === 'resolve' ? '/api/demo/resolve' : '/api/demo/' + action;
-    var btnId = {'cpu-spike':'btnCpu','memory-leak':'btnMem','latency-spike':'btnLat','resolve':'btnOk'}[action];
-    var btn = btnId ? document.getElementById(btnId) : null;
-    var orig = btn ? btn.textContent : '';
-    if (btn) { btn.textContent = '...'; btn.style.opacity = '0.6'; }
-    fetch(url).then(function(r){return r.json();}).then(function(){
-      if (btn) { btn.textContent = orig; btn.style.opacity = '1'; }
-      loadStatus();
-      setTimeout(function(){ loadAlerts(); loadSummary(); }, 2500);
-    }).catch(function(){
-      if (btn) { btn.textContent = orig; btn.style.opacity = '1'; }
-    });
-  };
-
-  function loadStatus() {
-    fetch('/api/demo/status').then(function(r){return r.json();}).then(function(d){
-      var set = function(id, val, cls) {
-        var el = document.getElementById(id);
-        if (el) { el.textContent = val; el.className = 'dval' + (cls ? ' ' + cls : ''); }
-      };
-      set('sReq', d.requestCount || '-');
-      set('sConn', d.activeConnections || '-');
-      set('sErr', d.errorCount || '-');
-      set('sCpu', d.cpuSpike ? '异常' : '正常', d.cpuSpike ? 'warn' : 'good');
-      set('sMem', d.memoryLeak ? '泄漏' : '正常', d.memoryLeak ? 'bad' : 'good');
-    });
-  }
-
-  // ── Start ─────────────────────────────────────────────
+  // ── Start ───────────────────────────────────────────
   loadAlerts();
-  loadSummary();
-  loadStatus();
-  setInterval(function(){
-    if (curTab === 'alerts') { loadAlerts(); loadSummary(); }
-    loadStatus();
-  }, 10000);
+  loadSum();
+  loadDSt();
+  setInterval(function() { if (curTab === 'alerts') { loadAlerts(); loadSum(); } loadDSt(); }, 10000);
 })();
 </script>
 </body>
