@@ -7,8 +7,8 @@
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
-      --bg: #0f1117; --surface: #1a1d27; --border: #2d3142;
-      --text: #e2e8f0; --text-muted: #64748b;
+      --bg: #0f1117; --surface: #1a1d27; --surface2: #21253a;
+      --border: #2d3142; --text: #e2e8f0; --text-muted: #64748b;
       --blue: #3b82f6; --green: #22c55e; --orange: #f97316;
       --yellow: #eab308; --red: #ef4444; --purple: #a855f7;
     }
@@ -25,6 +25,21 @@
     .refresh-btn { background: var(--border); border: none; color: var(--text-muted); padding: 5px 10px; border-radius: 6px; font-size: 12px; cursor: pointer; }
     .refresh-btn:hover { background: #3d4255; }
 
+    /* ── Stats bar ── */
+    .stats-bar { background: var(--surface); border-bottom: 1px solid var(--border); display: flex; gap: 0; padding: 0 20px; flex-shrink: 0; overflow-x: auto; }
+    .stat-item { padding: 8px 16px; display: flex; align-items: center; gap: 6px; border-bottom: 2px solid transparent; font-size: 12px; cursor: pointer; white-space: nowrap; }
+    .stat-item:hover { color: var(--text); }
+    .stat-item.active { border-bottom-color: var(--blue); color: var(--text); }
+    .stat-num { font-size: 16px; font-weight: 700; }
+    .stat-label { color: var(--text-muted); }
+    .stat-critical .stat-num { color: var(--red); }
+    .stat-high .stat-num { color: var(--orange); }
+    .stat-medium .stat-num { color: var(--yellow); }
+    .stat-low .stat-num { color: var(--text-muted); }
+    .stat-resolved .stat-num { color: var(--green); }
+    .stat-total .stat-num { color: var(--blue); }
+
+    /* ── Tabs ── */
     .tabs { background: var(--surface); border-bottom: 1px solid var(--border); display: flex; padding: 0 20px; flex-shrink: 0; }
     .tab { padding: 9px 14px; font-size: 13px; color: var(--text-muted); cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.15s; user-select: none; }
     .tab:hover { color: var(--text); }
@@ -32,10 +47,27 @@
     .tab-badge { display: inline-flex; align-items: center; justify-content: center; background: var(--red); color: white; font-size: 10px; font-weight: 600; min-width: 16px; height: 16px; border-radius: 8px; padding: 0 4px; margin-left: 4px; vertical-align: top; }
     .tab-badge.blue { background: var(--blue); }
 
+    /* ── Filter bar ── */
+    .filter-bar { background: var(--bg); border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; padding: 10px 20px; flex-shrink: 0; flex-wrap: wrap; }
+    .filter-group { display: flex; align-items: center; gap: 6px; }
+    .filter-label { font-size: 11px; color: var(--text-muted); }
+    .filter-select { background: var(--surface); border: 1px solid var(--border); color: var(--text); font-size: 12px; padding: 4px 8px; border-radius: 6px; outline: none; cursor: pointer; }
+    .filter-select:focus { border-color: var(--blue); }
+    .filter-input { background: var(--surface); border: 1px solid var(--border); color: var(--text); font-size: 12px; padding: 4px 8px; border-radius: 6px; outline: none; width: 140px; }
+    .filter-input:focus { border-color: var(--blue); }
+    .filter-btn { background: var(--blue); border: none; color: white; font-size: 12px; padding: 5px 12px; border-radius: 6px; cursor: pointer; }
+    .filter-btn:hover { opacity: 0.85; }
+    .filter-btn.export { background: var(--surface2); border: 1px solid var(--border); color: var(--text); }
+    .filter-btn.export:hover { border-color: var(--blue); color: var(--blue); }
+    .filter-btn.clear { background: var(--surface2); border: 1px solid var(--border); color: var(--text-muted); }
+
+    /* ── Main ── */
     .main { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
     .panel { flex: 1; overflow-y: auto; padding: 14px 20px; display: flex; flex-direction: column; gap: 10px; }
 
-    .alert-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; border-left: 3px solid var(--border); }
+    /* ── Alert card ── */
+    .alert-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; border-left: 3px solid var(--border); transition: box-shadow 0.2s; }
+    .alert-card:hover { box-shadow: 0 2px 12px rgba(0,0,0,0.3); }
     .alert-card.critical { border-left-color: var(--red); }
     .alert-card.high { border-left-color: var(--orange); }
     .alert-card.medium { border-left-color: var(--yellow); }
@@ -54,12 +86,20 @@
     .mval { color: var(--text); font-weight: 500; }
     .diagnosis { background: #13161f; border: 1px solid var(--border); border-radius: 8px; padding: 9px 12px; font-size: 12px; line-height: 1.65; margin-top: 6px; color: var(--text); }
     .diag-label { font-size: 9px; color: var(--blue); font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 5px; }
-    .diag-footer { display: flex; align-items: center; gap: 6px; margin-top: 6px; font-size: 11px; color: var(--text-muted); }
+    .diag-footer { display: flex; align-items: center; gap: 6px; margin-top: 6px; font-size: 11px; color: var(--text-muted); flex-wrap: wrap; }
     .spinner { width: 11px; height: 11px; border: 2px solid currentColor; border-top-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
     .feishu-ok { color: var(--green); }
     .feishu-fail { color: var(--red); }
 
+    /* ── Pagination ── */
+    .pagination { display: flex; align-items: center; justify-content: center; gap: 6px; padding: 12px 0; flex-shrink: 0; }
+    .page-btn { background: var(--surface2); border: 1px solid var(--border); color: var(--text); font-size: 12px; padding: 5px 10px; border-radius: 6px; cursor: pointer; min-width: 32px; text-align: center; }
+    .page-btn:hover { border-color: var(--blue); color: var(--blue); }
+    .page-btn.disabled { opacity: 0.35; cursor: not-allowed; }
+    .page-info { font-size: 12px; color: var(--text-muted); padding: 0 8px; }
+
+    /* ── KB ── */
     .kb-case { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; border-left: 3px solid var(--blue); }
     .kb-feature { font-size: 13px; color: var(--text); margin-bottom: 6px; }
     .kb-cause { font-size: 12px; color: var(--yellow); margin-bottom: 5px; }
@@ -67,6 +107,7 @@
     .kb-meta { font-size: 10px; color: var(--text-muted); margin-top: 5px; display: flex; gap: 10px; }
     .kb-ok { color: var(--green); }
 
+    /* ── Chat ── */
     .chat-wrap { flex: 1; display: flex; flex-direction: column; max-width: 680px; width: 100%; margin: 0 auto; padding: 14px 0; }
     .chat-box { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; }
     .chat-msg { max-width: 82%; padding: 9px 13px; border-radius: 12px; font-size: 13px; line-height: 1.6; }
@@ -78,6 +119,7 @@
     .chat-send { background: var(--blue); border: none; color: white; border-radius: 8px; padding: 9px 16px; font-size: 13px; cursor: pointer; }
     .chat-send:hover { opacity: 0.85; }
 
+    /* ── Demo ── */
     .demo-panel { padding: 12px 20px; background: var(--surface); border-top: 1px solid var(--border); flex-shrink: 0; }
     .demo-title { font-size: 11px; color: var(--text-muted); margin-bottom: 8px; }
     .demo-buttons { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -95,6 +137,10 @@
 
     .empty { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 180px; color: var(--text-muted); font-size: 13px; gap: 6px; }
     .empty-ic { font-size: 36px; opacity: 0.25; }
+
+    /* ── Loading ── */
+    .loading-row { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 20px; color: var(--text-muted); font-size: 13px; }
+    .loading-spinner { width: 16px; height: 16px; border: 2px solid var(--border); border-top-color: var(--blue); border-radius: 50%; animation: spin 0.8s linear infinite; }
   </style>
 </head>
 <body>
@@ -109,10 +155,75 @@
   </div>
 </header>
 
+<!-- Stats summary bar -->
+<div class="stats-bar" id="statsBar">
+  <div class="stat-item stat-total active" data-filter="all" onclick="setAlertFilter('all')">
+    <span class="stat-num" id="statTotal">-</span>
+    <span class="stat-label">全部</span>
+  </div>
+  <div class="stat-item stat-critical" data-filter="critical" onclick="setAlertFilter('critical')">
+    <span class="stat-num" id="statCrit">-</span>
+    <span class="stat-label">严重</span>
+  </div>
+  <div class="stat-item stat-high" data-filter="high" onclick="setAlertFilter('high')">
+    <span class="stat-num" id="statHigh">-</span>
+    <span class="stat-label">高</span>
+  </div>
+  <div class="stat-item stat-medium" data-filter="medium" onclick="setAlertFilter('medium')">
+    <span class="stat-num" id="statMed">-</span>
+    <span class="stat-label">中</span>
+  </div>
+  <div class="stat-item stat-low" data-filter="low" onclick="setAlertFilter('low')">
+    <span class="stat-num" id="statLow">-</span>
+    <span class="stat-label">低</span>
+  </div>
+  <div class="stat-item stat-resolved" data-filter="resolved" onclick="setAlertFilter('resolved')">
+    <span class="stat-num" id="statRes">-</span>
+    <span class="stat-label">已解决</span>
+  </div>
+</div>
+
 <div class="tabs">
   <div class="tab active" id="tab-alerts">告警列表 <span class="tab-badge" id="cntAlerts">0</span></div>
   <div class="tab" id="tab-kb">知识库 <span class="tab-badge blue" id="cntKb">3</span></div>
   <div class="tab" id="tab-chat">AI 对话</div>
+</div>
+
+<!-- Filter bar -->
+<div class="filter-bar" id="filterBar">
+  <div class="filter-group">
+    <span class="filter-label">级别</span>
+    <select class="filter-select" id="fSev">
+      <option value="all">全部</option>
+      <option value="critical">严重</option>
+      <option value="high">高</option>
+      <option value="medium">中</option>
+      <option value="low">低</option>
+    </select>
+  </div>
+  <div class="filter-group">
+    <span class="filter-label">状态</span>
+    <select class="filter-select" id="fStatus">
+      <option value="all">全部</option>
+      <option value="pending">等待</option>
+      <option value="diagnosing">诊断中</option>
+      <option value="resolved">已解决</option>
+      <option value="error">异常</option>
+    </select>
+  </div>
+  <div class="filter-group">
+    <span class="filter-label">时间</span>
+    <input class="filter-input" type="date" id="fStart" placeholder="开始">
+    <span style="color:var(--text-muted)">~</span>
+    <input class="filter-input" type="date" id="fEnd" placeholder="结束">
+  </div>
+  <div class="filter-group">
+    <span class="filter-label">指标</span>
+    <input class="filter-input" type="text" id="fMetric" placeholder="搜索指标名...">
+  </div>
+  <button class="filter-btn" onclick="applyFilter()">筛选</button>
+  <button class="filter-btn clear" onclick="clearFilter()">重置</button>
+  <button class="filter-btn export" onclick="exportCsv()">⬇ 导出 CSV</button>
 </div>
 
 <div class="main">
@@ -122,20 +233,23 @@
     <div class="chat-wrap">
       <div class="chat-box" id="chatBox"></div>
       <div class="chat-input-row">
-        <input class="chat-input" id="chatInput" placeholder="描述告警现象，例如：Pod nginx CPU 99%" onkeydown="if(event.keyCode===13&&!event.shiftKey){event.preventDefault();sendMsg()}">
-        <button class="chat-send" onclick="window.sendMsg && window.sendMsg()">发送</button>
+        <input class="chat-input" id="chatInput" placeholder="描述告警现象，例如：Pod nginx CPU 99%" onkeydown="if(event.keyCode===13&&!event.shiftKey){event.preventDefault();window.sendMsg()}">
+        <button class="chat-send" onclick="window.sendMsg()">发送</button>
       </div>
     </div>
   </div>
 </div>
 
+<!-- Pagination -->
+<div class="pagination" id="pagination"></div>
+
 <div class="demo-panel">
   <div class="demo-title">&#x1F916; 模拟告警触发</div>
   <div class="demo-buttons">
-    <button class="demo-btn cpu" id="btnCpu" >&#x1F525; CPU 异常</button>
-    <button class="demo-btn mem" id="btnMem" >&#x1F4BE; 内存泄漏</button>
-    <button class="demo-btn" id="btnLat" >&#x23F1; 延迟飙升</button>
-    <button class="demo-btn ok" id="btnOk" >&#x2705; 恢复正常</button>
+    <button class="demo-btn cpu" id="btnCpu">&#x1F525; CPU 异常</button>
+    <button class="demo-btn mem" id="btnMem">&#x1F4BE; 内存泄漏</button>
+    <button class="demo-btn" id="btnLat">&#x23F1; 延迟飙升</button>
+    <button class="demo-btn ok" id="btnOk">&#x2705; 恢复正常</button>
   </div>
   <div class="demo-status" id="demoStatus">
     <span>请求: <span class="dval" id="sReq">-</span></span>
@@ -150,8 +264,10 @@
 (function() {
   var curTab = 'alerts';
   var chatHist = [];
+  var currentPage = 1;
+  var currentFilters = { severity: 'all', status: 'all', startTime: '', endTime: '', metricName: '' };
 
-  // health
+  // ── Init ──────────────────────────────────────────────
   fetch('/api/health').then(function(r){return r.json();}).then(function(){
     document.getElementById('dot').className = 'status-dot ok';
     document.getElementById('statusTx').textContent = '服务正常';
@@ -160,34 +276,49 @@
     document.getElementById('statusTx').textContent = '服务离线';
   });
 
-  // tabs
   document.getElementById('tab-alerts').addEventListener('click', function(){ setTab('alerts'); });
   document.getElementById('tab-kb').addEventListener('click', function(){ setTab('kb'); });
   document.getElementById('tab-chat').addEventListener('click', function(){ setTab('chat'); });
-  document.getElementById('refreshBtn').addEventListener('click', function(){ loadAlerts(); loadStatus(); });
+  document.getElementById('refreshBtn').addEventListener('click', function(){ loadAlerts(); loadSummary(); loadStatus(); });
+  document.getElementById('btnCpu').addEventListener('click', function(){ demo('cpu-spike'); });
+  document.getElementById('btnMem').addEventListener('click', function(){ demo('memory-leak'); });
+  document.getElementById('btnLat').addEventListener('click', function(){ demo('latency-spike'); });
+  document.getElementById('btnOk').addEventListener('click', function(){ demo('resolve'); });
 
-  window.setTab = function(tab) {
-    var i;
+  // ── Tab ──────────────────────────────────────────────
+  function setTab(tab) {
     var tabs = document.querySelectorAll('.tab');
-    for (i = 0; i < tabs.length; i++) { tabs[i].classList.remove('active'); }
+    for (var i = 0; i < tabs.length; i++) tabs[i].classList.remove('active');
     document.getElementById('tab-' + tab).classList.add('active');
     document.getElementById('panel-alerts').style.display = tab === 'alerts' ? '' : 'none';
     document.getElementById('panel-kb').style.display = tab === 'kb' ? '' : 'none';
     document.getElementById('panel-chat').style.display = tab === 'chat' ? '' : 'none';
+    document.getElementById('pagination').style.display = tab === 'alerts' ? '' : 'none';
+    document.getElementById('filterBar').style.display = tab === 'alerts' ? '' : 'none';
+    document.getElementById('statsBar').style.display = tab === 'alerts' ? '' : 'none';
     curTab = tab;
-    if (tab === 'alerts') loadAlerts();
+    if (tab === 'alerts') { currentPage = 1; loadAlerts(); loadSummary(); }
     if (tab === 'kb') loadKb();
-  };
-  function setTab(tab) { window.setTab(tab); }
+  }
 
-  // alerts
+  // ── Load alerts (paginated) ────────────────────────────
   function loadAlerts() {
-    fetch('/api/alerts').then(function(r){return r.json();}).then(function(d){
+    var panel = document.getElementById('panel-alerts');
+    panel.innerHTML = '<div class="loading-row"><div class="loading-spinner"></div>加载中...</div>';
+
+    var params = 'page=' + currentPage + '&pageSize=20';
+    if (currentFilters.severity && currentFilters.severity !== 'all') params += '&severity=' + currentFilters.severity;
+    if (currentFilters.status && currentFilters.status !== 'all') params += '&status=' + currentFilters.status;
+    if (currentFilters.metricName) params += '&metricName=' + encodeURIComponent(currentFilters.metricName);
+    if (currentFilters.startTime) params += '&startTime=' + currentFilters.startTime + ' 00:00:00';
+    if (currentFilters.endTime) params += '&endTime=' + currentFilters.endTime + ' 23:59:59';
+
+    fetch('/api/alerts?' + params).then(function(r){return r.json();}).then(function(d){
       var alerts = d.alerts || [];
-      document.getElementById('cntAlerts').textContent = alerts.length;
-      var panel = document.getElementById('panel-alerts');
+      document.getElementById('cntAlerts').textContent = d.total || 0;
       if (!alerts.length) {
-        panel.innerHTML = '<div class="empty"><div class="empty-ic">&#x1F6E1;</div><div>暂无告警</div><div style="font-size:11px;color:var(--text-muted)">点击下方模拟按钮触发</div></div>';
+        panel.innerHTML = '<div class="empty"><div class="empty-ic">&#x1F6E1;</div><div>暂无告警</div></div>';
+        renderPagination(d.page, d.totalPages, d.total);
         return;
       }
       var h = '';
@@ -213,23 +344,114 @@
           diagH +
           '<div class="diag-footer">' +
             spin +
-            '<span style="color:var(--text-muted)">' + stLbl(a.status) + '</span>' +
+            '<span>' + stLbl(a.status) + '</span>' +
             dur +
             '<span style="margin-left:auto" class="' + fsClass + '">' + fsTxt + '</span>' +
           '</div>' +
         '</div>';
       }
       panel.innerHTML = h;
+      renderPagination(d.page, d.totalPages, d.total);
     }).catch(function(e){
-      document.getElementById('panel-alerts').innerHTML = '<div class="empty"><div>加载失败: ' + esc(e.message) + '</div></div>';
+      panel.innerHTML = '<div class="empty"><div>加载失败: ' + esc(e.message) + '</div></div>';
     });
   }
 
+  function renderPagination(page, totalPages, total) {
+    var pg = document.getElementById('pagination');
+    if (totalPages <= 1) { pg.innerHTML = '<span class="page-info">共 ' + total + ' 条</span>'; return; }
+    var h = '';
+    h += '<button class="page-btn' + (page <= 1 ? ' disabled' : '') + '" onclick="goPage(' + (page-1) + ')">上一页</button>';
+    var start = Math.max(1, page - 2);
+    var end = Math.min(totalPages, page + 2);
+    if (start > 1) { h += '<button class="page-btn" onclick="goPage(1)">1</button>'; if (start > 2) h += '<span style="color:var(--text-muted)">...</span>'; }
+    for (var i = start; i <= end; i++) {
+      h += '<button class="page-btn' + (i === page ? '" style="background:var(--blue);border-color:var(--blue)"' : '"') + ' onclick="goPage(' + i + ')">' + i + '</button>';
+    }
+    if (end < totalPages) { if (end < totalPages - 1) h += '<span style="color:var(--text-muted)">...</span>'; h += '<button class="page-btn" onclick="goPage(' + totalPages + ')">' + totalPages + '</button>'; }
+    h += '<button class="page-btn' + (page >= totalPages ? ' disabled' : '') + '" onclick="goPage(' + (page+1) + ')">下一页</button>';
+    h += '<span class="page-info">第 ' + page + '/' + totalPages + ' 页，共 ' + total + ' 条</span>';
+    pg.innerHTML = h;
+  }
+
+  window.goPage = function(p) { currentPage = p; loadAlerts(); };
+
+  // ── Summary stats ─────────────────────────────────────
+  function loadSummary() {
+    fetch('/api/alerts/summary').then(function(r){return r.json();}).then(function(d){
+      document.getElementById('statTotal').textContent = d.total || 0;
+      document.getElementById('statCrit').textContent = d.critical || 0;
+      document.getElementById('statHigh').textContent = d.high || 0;
+      document.getElementById('statMed').textContent = d.medium || 0;
+      document.getElementById('statLow').textContent = d.low || 0;
+      document.getElementById('statRes').textContent = d.resolved || 0;
+    });
+  }
+
+  window.setAlertFilter = function(sev) {
+    if (sev === 'all') {
+      document.getElementById('fSev').value = 'all';
+      currentFilters.severity = 'all';
+    } else {
+      document.getElementById('fSev').value = sev;
+      currentFilters.severity = sev;
+    }
+    currentPage = 1;
+    loadAlerts();
+    // highlight active stat
+    var items = document.querySelectorAll('.stat-item');
+    for (var i = 0; i < items.length; i++) {
+      items[i].classList.remove('active');
+      if (items[i].getAttribute('data-filter') === (sev === 'all' ? 'all' : sev)) {
+        items[i].classList.add('active');
+      }
+    }
+  };
+
+  // ── Filter ─────────────────────────────────────────────
+  window.applyFilter = function() {
+    currentFilters.severity = document.getElementById('fSev').value;
+    currentFilters.status = document.getElementById('fStatus').value;
+    currentFilters.metricName = document.getElementById('fMetric').value.trim();
+    currentFilters.startTime = document.getElementById('fStart').value;
+    currentFilters.endTime = document.getElementById('fEnd').value;
+    currentPage = 1;
+    loadAlerts();
+  };
+
+  window.clearFilter = function() {
+    document.getElementById('fSev').value = 'all';
+    document.getElementById('fStatus').value = 'all';
+    document.getElementById('fMetric').value = '';
+    document.getElementById('fStart').value = '';
+    document.getElementById('fEnd').value = '';
+    currentFilters = { severity: 'all', status: 'all', startTime: '', endTime: '', metricName: '' };
+    currentPage = 1;
+    loadAlerts();
+    // reset stat highlights
+    var items = document.querySelectorAll('.stat-item');
+    for (var i = 0; i < items.length; i++) {
+      items[i].classList.remove('active');
+      if (items[i].getAttribute('data-filter') === 'all') items[i].classList.add('active');
+    }
+  };
+
+  // ── Export CSV ─────────────────────────────────────────
+  window.exportCsv = function() {
+    var params = '?';
+    if (currentFilters.severity && currentFilters.severity !== 'all') params += 'severity=' + currentFilters.severity + '&';
+    if (currentFilters.status && currentFilters.status !== 'all') params += 'status=' + currentFilters.status + '&';
+    if (currentFilters.startTime) params += 'startTime=' + currentFilters.startTime + ' 00:00:00&';
+    if (currentFilters.endTime) params += 'endTime=' + currentFilters.endTime + ' 23:59:59&';
+    window.open('/api/alerts/export' + params, '_blank');
+  };
+
+  // ── Helpers ─────────────────────────────────────────────
   function fmtDiag(t) {
     return esc(t).replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>').replace(/`([^`]+)`/g,'<pre style="font-size:11px;background:#0f1117;padding:5px;border-radius:4px;overflow-x:auto">$1</pre>').replace(/\n/g,'<br>');
   }
   function sevLbl(s) { return {critical:'CRIT',high:'HIGH',medium:'MED',low:'LOW'}[s]||'LOW'; }
-  function stLbl(s) { return {pending:'等待诊断',diagnosing:'AI 诊断中...',resolved:'已解决',error:'诊断异常'}[s]||'等待'; }
+  function stLbl(s) { return {pending:'等待',diagnosing:'AI诊断中...',resolved:'已解决',error:'异常'}[s]||'等待'; }
   function timeAgo(ts) {
     if (!ts) return '-';
     var d = new Date(ts);
@@ -239,10 +461,11 @@
     if (diff < 86400) return Math.floor(diff/3600) + '小时前';
     return d.toLocaleDateString('zh-CN');
   }
-  function fmt(v) { return v == null ? '-' : (typeof v === 'number' ? (v > 100 ? v.toFixed(0) : v.toFixed(2)) : v); }
+  function fmt(v) { return v == null ? '-' : (typeof v === 'number' ? (v > 100 ? v.toFixed(0) : v.toFixed(
+2) : v); }
   function esc(s) { return s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
-  // knowledge base
+  // ── Knowledge base ─────────────────────────────────────
   function loadKb() {
     fetch('/api/kb').then(function(r){return r.json();}).then(function(d){
       var cases = d.cases || [];
@@ -271,8 +494,8 @@
     });
   }
 
-  // chat
-  function sendMsg() {
+  // ── Chat ──────────────────────────────────────────────
+  window.sendMsg = function() {
     var inp = document.getElementById('chatInput');
     var text = inp.value.trim();
     if (!text) return;
@@ -291,11 +514,12 @@
     }).then(function(r){return r.json();}).then(function(d){
       loading.textContent = d.conclusion || '无结论';
       chatHist.push({role:'agent', content: d.conclusion || '无结论'});
-      setTimeout(loadAlerts, 2000);
+      renderChat();
+      setTimeout(function(){ loadAlerts(); loadSummary(); }, 2000);
     }).catch(function(e){
       loading.textContent = '请求失败: ' + e.message;
     });
-  }
+  };
 
   function renderChat() {
     var box = document.getElementById('chatBox');
@@ -305,27 +529,32 @@
       var cls = m.role === 'user' ? 'chat-user' : 'chat-agent';
       h += '<div class="chat-msg ' + cls + '">' + fmtDiag(m.content) + '</div>';
     }
-    box.innerHTML = h;
+    // append loading div if exists
+    var last = box.lastElementChild;
+    if (last && last.textContent === 'AI 诊断中...') {
+      box.innerHTML = h;
+      box.appendChild(last);
+    } else {
+      box.innerHTML = h;
+    }
     box.lastElementChild && box.lastElementChild.scrollIntoView();
   }
 
-  // demo
+  // ── Demo ──────────────────────────────────────────────
   window.demo = function(action) {
     var url = action === 'resolve' ? '/api/demo/resolve' : '/api/demo/' + action;
     var btnId = {'cpu-spike':'btnCpu','memory-leak':'btnMem','latency-spike':'btnLat','resolve':'btnOk'}[action];
     var btn = btnId ? document.getElementById(btnId) : null;
-    var origText = btn ? btn.textContent : '';
-    if (btn) { btn.textContent = '...触发中'; btn.style.opacity = '0.6'; }
-    fetch(url).then(function(r){return r.json();}).then(function(d){
-      if (btn) { btn.textContent = origText; btn.style.opacity = '1'; }
+    var orig = btn ? btn.textContent : '';
+    if (btn) { btn.textContent = '...'; btn.style.opacity = '0.6'; }
+    fetch(url).then(function(r){return r.json();}).then(function(){
+      if (btn) { btn.textContent = orig; btn.style.opacity = '1'; }
       loadStatus();
-      setTimeout(loadAlerts, 2500);
-    }).catch(function(e){
-      if (btn) { btn.textContent = origText; btn.style.opacity = '1'; }
-      console.log(e);
+      setTimeout(function(){ loadAlerts(); loadSummary(); }, 2500);
+    }).catch(function(){
+      if (btn) { btn.textContent = orig; btn.style.opacity = '1'; }
     });
   };
-  function demo(action) { window.demo(action); }
 
   function loadStatus() {
     fetch('/api/demo/status').then(function(r){return r.json();}).then(function(d){
@@ -341,17 +570,12 @@
     });
   }
 
-  // demo button listeners (attached after demo fn is defined)
-  document.getElementById('btnCpu').onclick = function(){ demo('cpu-spike'); };
-  document.getElementById('btnMem').onclick = function(){ demo('memory-leak'); };
-  document.getElementById('btnLat').onclick = function(){ demo('latency-spike'); };
-  document.getElementById('btnOk').onclick = function(){ demo('resolve'); };
-
-  // start
+  // ── Start ─────────────────────────────────────────────
   loadAlerts();
+  loadSummary();
   loadStatus();
-  setInterval(function() {
-    if (curTab === 'alerts') loadAlerts();
+  setInterval(function(){
+    if (curTab === 'alerts') { loadAlerts(); loadSummary(); }
     loadStatus();
   }, 10000);
 })();
