@@ -44,6 +44,7 @@ monitoring:
   collect-interval-seconds: 30
   feishu-webhook: https://open.feishu.cn/open-apis/bot/v2/hook/0edc6deb-7a7f-41b4-b9f7-db8f9e3a82fc
   feishu-enabled: true
+  feishu-suppress-minutes: 10
   auto-diagnosis-enabled: true
   alert-rules:
     # Demo 指标告警（触发 CPU 异常后 30 秒触发）

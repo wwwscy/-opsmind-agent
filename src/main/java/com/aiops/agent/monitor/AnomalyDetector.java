@@ -142,8 +142,7 @@ public class AnomalyDetector {
                 }
 
                 if (monitoringProperties.isFeishuEnabled()) {
-                    String msg = buildFeishuMsg(alert, rule, val, diagnosis, recovery);
-                    boolean ok = feishuNotificationService.send(msg);
+                    boolean ok = feishuNotificationService.send(alert, diagnosis, recovery);
                     alert.setNotified(ok);
                     if (ok) log.info("[AnomalyDetector] Feishu sent");
                 }
