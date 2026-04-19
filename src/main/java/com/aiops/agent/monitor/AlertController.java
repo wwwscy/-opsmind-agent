@@ -172,6 +172,13 @@ public class AlertController {
                 .body(csv.toString());
     }
 
+    /** 清空所有告警记录（测试用） */
+    @DeleteMapping
+    public ResponseEntity<?> clearAll() {
+        alertRecordRepository.deleteAll();
+        return ResponseEntity.ok(Map.of("cleared", true, "total", 0));
+    }
+
     // ── Internal ──────────────────────────────────────────
 
     private Specification<AlertRecord> buildSpec(String severity, String status, String metricName,

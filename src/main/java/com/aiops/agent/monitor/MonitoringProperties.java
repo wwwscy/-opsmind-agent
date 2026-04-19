@@ -19,6 +19,8 @@ public class MonitoringProperties {
     private String feishuWebhook = "";
     private boolean feishuEnabled = true;
     private boolean autoDiagnosisEnabled = true;
+    /** 同一指标诊断抑制时间（分钟），避免重复调用 AI */
+    private int diagnosisSuppressMinutes = 10;
     private List<AlertRuleConfig> alertRules = new ArrayList<>();
 
     @Data

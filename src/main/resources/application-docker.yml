@@ -5,7 +5,7 @@ spring:
     name: opsmind-agent
 
   datasource:
-    url: jdbc:mysql://localhost:3306/opsmind?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai
+    url: jdbc:mysql://mysql:3306/opsmind?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai
     driver-class-name: com.mysql.cj.jdbc.Driver
     username: opsmind
     password: opsmind_pass
@@ -18,11 +18,6 @@ spring:
       hibernate:
         dialect: org.hibernate.dialect.MySQL8Dialect
 
-  h2:
-    console:
-      enabled: true
-      path: /h2-console
-
 # Actuator 暴露指标端点
 management:
   endpoints:
@@ -32,14 +27,10 @@ management:
   endpoint:
     health:
       show-details: always
-  metrics:
-    export:
-      prometheus:
-        enabled: true
 
 # MiniMax LLM
 minimax:
-  api-key: sk-cp-FJWOJ-fAmPxOrrXQyHLhZvMIDfBR5RIn8n3iHfqB00BpowDzVUNU9ww2ehmHh7on22SiVnYozEnhPIUJpLAXi519YrhD3InseElcc2df-lYIXW1HJS0Yr5I
+  api-key: ${MINIMAX_API_KEY:your-api-key-here}
   base-url: https://api.minimax.chat/v1
   chat-model: MiniMax-M2.1
   embedding-model: embo01
@@ -47,14 +38,12 @@ minimax:
 # 监控告警配置
 monitoring:
   collect-interval-seconds: 30
-  feishu-webhook: https://open.feishu.cn/open-apis/bot/v2/hook/0edc6deb-7a7f-41b4-b9f7-db8f9e3a82fc
-  feishu-enabled: true
+  feishu-webhook: ${FEISHU_WEBHOOK_URL:}
+  feishu-enabled: ${FEISHU_ENABLED:true}
   feishu-suppress-minutes: 10
   auto-diagnosis-enabled: true
-  # 同一指标诊断抑制时间（分钟），避免重复调用 AI 诊断
   diagnosis-suppress-minutes: 10
   alert-rules:
-    # Demo 指标告警（触发 CPU 异常后 30 秒触发）
     - name: CPU异常
       metric: app.cpu.spike
       target: demo-pod
@@ -62,7 +51,6 @@ monitoring:
       threshold: 0.5
       duration-seconds: 30
       severity: high
-    # 内存泄漏告警（触发内存泄漏后 30 秒触发）
     - name: 内存泄漏
       metric: app.memory.leak
       target: demo-pod
@@ -70,7 +58,6 @@ monitoring:
       threshold: 0.5
       duration-seconds: 30
       severity: critical
-    # JVM 活跃线程数（备用）
     - name: JVM活跃线程数过高
       metric: jvm.threads.live
       target: demo-pod
@@ -83,17 +70,12 @@ react:
   max-iterations: 8
   timeout-seconds: 90
 
-# Milvus Vector DB 配置
+# Milvus Vector DB
 milvus:
-  host: localhost
-  port: 19530
+  host: ${MILVUS_HOST:milvus}
+  port: ${MILVUS_PORT:19530}
   collection-name: opsmind_kb
   dimension: 384
-
-# Redis 配置
-redis:
-  host: localhost
-  port: 6379
 
 server:
   port: 8080

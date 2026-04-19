@@ -9,11 +9,18 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import jakarta.annotation.PostConstruct;
 import java.time.LocalDateTime;
 import java.util.*;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
 
+/**
+ * 异常检测引擎
+ *
+ * 定时扫描指标，对比告警规则，判断是否触发告警
+ * 触发后自动调用 AI 诊断，并推送到飞书
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -26,20 +33,35 @@ public class AnomalyDetector {
     private final AlertRecordRepository alertRecordRepository;
     private final MonitoringProperties monitoringProperties;
 
-    private final Set<String> firingMetrics = ConcurrentHashMap.newKeySet();
+    /** 正在处理的告警（metric → 活跃任务数），用计数替代是否存在 */
+    private final ConcurrentHashMap<String, AtomicInteger> activeAlerts = new ConcurrentHashMap<>();
 
-    @jakarta.annotation.PostConstruct
+    /** 上次诊断时间（metric → 上次触发 AI 诊断的时间戳） */
+    private final ConcurrentHashMap<String, Long> lastDiagnosed = new ConcurrentHashMap<>();
+
+    /** 诊断线程池（显式而非 daemon ForkJoinPool） */
+    private final ExecutorService diagExecutor = Executors.newFixedThreadPool(2);
+
+    /** 重启时清理历史遗留 diagnosing 记录 */
+    @PostConstruct
     public void init() {
         log.info("[AnomalyDetector] init, rules={}",
                 monitoringProperties.getAlertRules() != null ? monitoringProperties.getAlertRules().size() : 0);
+        try {
+            alertRecordRepository.findByStatus("diagnosing").forEach(a -> {
+                a.setStatus("error");
+                a.setDiagnosis("系统重启，诊断中断");
+                alertRecordRepository.save(a);
+                log.info("[AnomalyDetector] 清理 stale 记录 id={}", a.getId());
+            });
+        } catch (Exception e) {
+            log.warn("[AnomalyDetector] 清理 stale 失败: {}", e.getMessage());
+        }
     }
 
     @org.springframework.scheduling.annotation.Scheduled(fixedDelayString = "${monitoring.collect-interval-seconds:30}000")
-    @Transactional
     public void detect() {
-        if (monitoringProperties.getAlertRules() == null || monitoringProperties.getAlertRules().isEmpty()) {
-            return;
-        }
+        if (monitoringProperties.getAlertRules() == null || monitoringProperties.getAlertRules().isEmpty()) return;
         for (MonitoringProperties.AlertRuleConfig cfg : monitoringProperties.getAlertRules()) {
             try {
                 checkRule(convert(cfg));
@@ -71,21 +93,43 @@ public class AnomalyDetector {
         if (triggered) {
             int dur = metricsCollector.getAlertDuration(rule.getMetric()) + 30;
             if (dur >= rule.getDurationSeconds()) {
-                if (firingMetrics.contains(rule.getMetric())) {
+                // 原子递增：只有从 0→1 才触发（防止并发重复 FIRE）
+                AtomicInteger cnt = activeAlerts.computeIfAbsent(rule.getMetric(), k -> new AtomicInteger(0));
+                if (cnt.getAndIncrement() != 0) {
+                    log.debug("[AnomalyDetector] 跳过（已有活跃诊断）metric={}", rule.getMetric());
                     return;
                 }
-                firingMetrics.add(rule.getMetric());
                 log.warn("[AnomalyDetector] FIRE alert={} metric={} val={}", rule.getName(), rule.getMetric(), val);
                 AlertRecord alert = createAlert(rule, val);
-                if (monitoringProperties.isAutoDiagnosisEnabled() || monitoringProperties.isFeishuEnabled()) {
-                    triggerAsync(alert, rule, val);
+                // FIRE 后清除 duration，防止 detect() 周期内重复触发
+                metricsCollector.recordAlertDuration(rule.getMetric(), false);
+                // 检查是否在抑制期内（同一指标避免重复 AI 诊断）
+                if (isSuppressed(rule.getMetric())) {
+                    log.info("[AnomalyDetector] 抑制期内，跳过 AI 诊断 metric={}", rule.getMetric());
+                    alert.setStatus("pending");
+                    alert.setDiagnosis("抑制期内，跳过 AI 诊断");
+                    alertRecordRepository.save(alert);
+                    // 递减计数
+                    AtomicInteger c = activeAlerts.get(rule.getMetric());
+                    if (c != null && c.decrementAndGet() == 0) activeAlerts.remove(rule.getMetric());
+                    return;
                 }
+                triggerAsync(alert, rule, val);
             } else {
                 metricsCollector.recordAlertDuration(rule.getMetric(), true);
             }
         } else {
             metricsCollector.recordAlertDuration(rule.getMetric(), false);
         }
+    }
+
+    /** 检查是否在诊断抑制期内 */
+    private boolean isSuppressed(String metric) {
+        int suppressMinutes = monitoringProperties.getDiagnosisSuppressMinutes();
+        if (suppressMinutes <= 0) return false;
+        Long lastTime = lastDiagnosed.get(metric);
+        if (lastTime == null) return false;
+        return (System.currentTimeMillis() - lastTime) < (suppressMinutes * 60_000L);
     }
 
     private AlertRecord createAlert(AlertRule rule, double val) {
@@ -104,57 +148,61 @@ public class AnomalyDetector {
     }
 
     private void triggerAsync(AlertRecord alert, AlertRule rule, double val) {
-        CompletableFuture.runAsync(() -> {
-            String diagnosis = null;
-            String recovery = null;
-            long start = System.currentTimeMillis();
+        diagExecutor.submit(() -> {
             try {
-                if (monitoringProperties.isAutoDiagnosisEnabled()) {
-                    alert.setStatus("diagnosing");
-                    alertRecordRepository.save(alert);
+                alert.setStatus("diagnosing");
+                alertRecordRepository.save(alert);
 
-                    String input = rule.getName() + " alert, metric=" + rule.getMetric()
-                            + ", current=" + val + ", threshold=" + rule.getCondition() + rule.getThreshold()
-                            + ", target=" + rule.getTarget() + ". Analyze root cause and suggest recovery.";
+                String input = rule.getName() + " alert, metric=" + rule.getMetric()
+                        + ", current=" + val + ", threshold=" + rule.getCondition() + rule.getThreshold()
+                        + ", target=" + rule.getTarget()
+                        + ". Analyze root cause and suggest recovery.";
+                input += buildMetricContext();
 
-                    input += buildMetricContext();
+                long start = System.currentTimeMillis();
+                DiagnosisResult r = autoDiagnosisService.diagnose(input, null);
+                long duration = System.currentTimeMillis() - start;
 
-                    AnomalyDetector.DiagnosisResult r = autoDiagnosisService.diagnose(input, null);
-                    diagnosis = r.conclusion;
-                    recovery = extractRecovery(diagnosis);
-                    alert.setDiagnosis(diagnosis);
-                    alert.setRecoverySuggestion(recovery);
-                    alert.setDiagnosisDurationMs((int) r.durationMs);
-                    alert.setStatus("resolved");
-                    log.info("[AnomalyDetector] AI done in {}ms", r.durationMs);
+                alert.setDiagnosis(r.conclusion);
+                alert.setRecoverySuggestion(extractRecovery(r.conclusion));
+                alert.setDiagnosisDurationMs((int) duration);
+                alert.setStatus("resolved");
+                log.info("[AnomalyDetector] AI done metric={} in {}ms", rule.getMetric(), duration);
 
-                    if (diagnosis != null && !diagnosis.isEmpty()) {
-                        String cause = extractRootCause(diagnosis);
-                        if (!cause.isEmpty()) {
-                            List<String> steps = recovery != null && !recovery.isEmpty()
-                                    ? Arrays.asList(recovery.split("\\n")) : Collections.emptyList();
-                            knowledgeBaseService.addCase(
-                                    rule.getName() + " on " + rule.getTarget(), cause, steps, "AI-auto");
-                            log.info("[AnomalyDetector] KB case added: {}", cause);
-                        }
+                // 存知识库
+                if (r.conclusion != null && !r.conclusion.isEmpty()) {
+                    String cause = extractRootCause(r.conclusion);
+                    if (!cause.isEmpty()) {
+                        List<String> steps = extractRecovery(r.conclusion) != null
+                                ? Arrays.asList(extractRecovery(r.conclusion).split("\n"))
+                                : Collections.emptyList();
+                        knowledgeBaseService.addCase(
+                                rule.getName() + " on " + rule.getTarget(), cause, steps, "AI-auto");
                     }
                 }
 
+                // 飞书推送
                 if (monitoringProperties.isFeishuEnabled()) {
-                    boolean ok = feishuNotificationService.send(alert, diagnosis, recovery);
+                    boolean ok = feishuNotificationService.send(alert, r.conclusion, extractRecovery(r.conclusion));
                     alert.setNotified(ok);
-                    if (ok) log.info("[AnomalyDetector] Feishu sent");
+                    if (ok) log.info("[AnomalyDetector] Feishu sent metric={}", rule.getMetric());
                 }
 
                 alertRecordRepository.save(alert);
 
             } catch (Exception e) {
-                log.error("[AnomalyDetector] error: {}", e.getMessage(), e);
+                log.error("[AnomalyDetector] metric={} error: {}", rule.getMetric(), e.getMessage(), e);
                 alert.setStatus("error");
-                alert.setDiagnosis("Error: " + e.getMessage());
+                alert.setDiagnosis("诊断异常: " + e.getMessage());
                 alertRecordRepository.save(alert);
             } finally {
-                firingMetrics.remove(rule.getMetric());
+                // 记录诊断完成时间，用于抑制期判断
+                lastDiagnosed.put(rule.getMetric(), System.currentTimeMillis());
+                // 递减计数，为0时从 Map 中移除
+                AtomicInteger cnt = activeAlerts.get(rule.getMetric());
+                if (cnt != null && cnt.decrementAndGet() == 0) {
+                    activeAlerts.remove(rule.getMetric());
+                }
             }
         });
     }
@@ -173,60 +221,55 @@ public class AnomalyDetector {
     private String extractRecovery(String diagnosis) {
         if (diagnosis == null) return null;
         StringBuilder sb = new StringBuilder();
-        for (String line : diagnosis.split("\\n")) {
+        for (String line : diagnosis.split("\n")) {
             if (line.contains("recover") || line.contains("suggest") || line.contains("step")
-                    || line.contains("rollback") || line.contains("scale") || line.contains("restart")) {
+                    || line.contains("rollback") || line.contains("scale") || line.contains("restart")
+                    || line.contains("建议") || line.contains("处理") || line.contains("步骤")) {
                 sb.append(line.trim()).append("\n");
             }
         }
         return sb.length() > 0 ? sb.toString().trim() : null;
     }
 
+    /** 从诊断结论中提取根因（跳过 RAG 原文） */
     private String extractRootCause(String diagnosis) {
         if (diagnosis == null || diagnosis.isEmpty()) return "";
-        for (String line : diagnosis.split("\\n")) {
-            if (line.contains("root cause") || line.contains("cause") || line.contains("reason")) {
-                String s = line.trim();
-                while (s.length() > 0 && (s.charAt(0) == '*' || s.charAt(0) == '-' || s.charAt(0) == '#' || Character.isWhitespace(s.charAt(0)))) {
-                    s = s.substring(1);
-                }
-                s = s.trim();
+        String[] skipMarkers = {"[参考历史案例]", "相似历史案例", "KB-", "alert_features",
+                "root_cause", "solution_steps", "案例 ID", "历史案例匹配"};
+        List<String> lines = new ArrayList<>();
+        for (String line : diagnosis.split("\n")) {
+            boolean skip = false;
+            for (String m : skipMarkers) {
+                if (line.contains(m)) { skip = true; break; }
+            }
+            if (!skip && line.trim().length() > 5) lines.add(line.trim());
+        }
+        if (lines.isEmpty()) {
+            return diagnosis.length() > 20 ? diagnosis.substring(0, 100) : diagnosis;
+        }
+        for (String line : lines) {
+            String lower = line.toLowerCase();
+            if (lower.contains("根因") || lower.contains("最可能") || lower.contains("主要怀疑")
+                    || lower.contains("原因") || lower.contains("conclusion")) {
+                String s = stripPrefix(line);
                 if (s.length() > 5) return s;
             }
         }
-        return diagnosis.length() > 20 ? diagnosis.substring(0, 80) : diagnosis;
+        String last = lines.get(lines.size() - 1);
+        return stripPrefix(last);
     }
 
-    private String buildFeishuMsg(AlertRecord alert, AlertRule rule, double val, String diagnosis, String recovery) {
-        StringBuilder sb = new StringBuilder();
-        sb.append(severityEmoji(alert.getSeverity())).append(" [").append(alert.getAlertName()).append("]\n");
-        sb.append("metric: ").append(alert.getMetricName()).append("\n");
-        sb.append("value: ").append(String.format("%.2f", val));
-        sb.append(" | threshold: ").append(rule.getCondition()).append(String.format("%.2f\n", rule.getThreshold()));
-        sb.append("time: ").append(alert.getTriggeredAt().toString()).append("\n");
-        sb.append("target: ").append(alert.getTarget()).append("\n");
-        if (diagnosis != null) {
-            sb.append("\nAI diagnosis:\n").append(diagnosis);
+    private String stripPrefix(String s) {
+        s = s.trim();
+        while (s.length() > 0 && (s.charAt(0) == '*' || s.charAt(0) == '-' || s.charAt(0) == '#')) {
+            s = s.substring(1).trim();
         }
-        if (recovery != null) {
-            sb.append("\n\nRecovery:\n").append(recovery);
-        }
-        sb.append("\n\nhttp://localhost:8080/api/alerts/").append(alert.getId());
-        return sb.toString();
-    }
-
-    private String severityEmoji(String sev) {
-        return switch (sev) {
-            case "critical" -> "CRITICAL";
-            case "high" -> "HIGH";
-            case "medium" -> "MEDIUM";
-            default -> "LOW";
-        };
+        return s;
     }
 
     public static class DiagnosisResult {
-        public String conclusion;
-        public long durationMs;
+        public final String conclusion;
+        public final long durationMs;
         public DiagnosisResult(String c, long d) { this.conclusion = c; this.durationMs = d; }
     }
 }

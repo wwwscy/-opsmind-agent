@@ -26,5 +26,8 @@ public interface AlertRecordRepository extends JpaRepository<AlertRecord, Long>,
 
     long countByStatus(String status);
 
+    /** 查询某状态的所有记录（用于清理） */
+    List<AlertRecord> findByStatus(String status);
+
     long countBySeverity(String severity);
 }

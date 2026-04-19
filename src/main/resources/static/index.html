@@ -278,14 +278,15 @@ body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:var(--bg
     demo: function(a) {
       var url = a === 'resolve' ? '/api/demo/resolve' : '/api/demo/' + a;
       var b = G({ 'cpu-spike': 'btn-cpu', 'memory-leak': 'btn-mem', 'latency-spike': 'btn-lat', 'resolve': 'btn-ok' }[a]);
+      if (b && b.disabled) return; // 防重复点击
       var ot = b ? b.textContent : '';
-      if (b) { b.textContent = '...'; b.style.opacity = '0.6'; }
+      if (b) { b.textContent = '...'; b.disabled = true; }
       fetch(url).then(function(r) { return r.json(); }).then(function() {
-        if (b) { b.textContent = ot; b.style.opacity = '1'; }
+        if (b) { b.textContent = ot; b.disabled = false; }
         loadDSt();
         if (a !== 'resolve') { API.tab('alerts'); setTimeout(function() { loadAlerts(); loadSum(); }, 2500); }
         else { setTimeout(function() { loadAlerts(); loadSum(); }, 500); }
-      }).catch(function() { if (b) { b.textContent = ot; b.style.opacity = '1'; } });
+      }).catch(function() { if (b) { b.textContent = ot; b.disabled = false; } });
     },
 
     sendMsg: function() {
