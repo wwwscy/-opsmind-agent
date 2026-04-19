@@ -1,0 +1,79 @@
+spring:
+  application:
+    name: opsmind-agent
+
+  datasource:
+    url: jdbc:h2:mem:opsmind;DB_CLOSE_DELAY=-1;MODE=MySQL
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+
+# Actuator 暴露指标端点
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+
+# MiniMax LLM
+minimax:
+  api-key: sk-cp-FJWOJ-fAmPxOrrXQyHLhZvMIDfBR5RIn8n3iHfqB00BpowDzVUNU9ww2ehmHh7on22SiVnYozEnhPIUJpLAXi519YrhD3InseElcc2df-lYIXW1HJS0Yr5I
+  base-url: https://api.minimax.chat/v1
+  chat-model: MiniMax-M2.1
+  embedding-model: embo01
+
+# 监控告警配置
+monitoring:
+  collect-interval-seconds: 30
+  feishu-webhook: https://open.feishu.cn/open-apis/bot/v2/hook/0edc6deb-7a7f-41b4-b9f7-db8f9e3a82fc
+  feishu-enabled: true
+  auto-diagnosis-enabled: true
+  alert-rules:
+    # Demo 指标告警（触发 CPU 异常后 30 秒触发）
+    - name: CPU异常
+      metric: app.cpu.spike
+      target: demo-pod
+      condition: ">"
+      threshold: 0.5
+      duration-seconds: 30
+      severity: high
+    # 内存泄漏告警（触发内存泄漏后 30 秒触发）
+    - name: 内存泄漏
+      metric: app.memory.leak
+      target: demo-pod
+      condition: ">"
+      threshold: 0.5
+      duration-seconds: 30
+      severity: critical
+    # JVM 活跃线程数（备用）
+    - name: JVM活跃线程数过高
+      metric: jvm.threads.live
+      target: demo-pod
+      condition: ">"
+      threshold: 100
+      duration-seconds: 60
+      severity: medium
+
+react:
+  max-iterations: 5
+  timeout-seconds: 90
+
+server:
+  port: 8080

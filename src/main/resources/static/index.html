@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OpsMind — AI 智能运维诊断平台</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0f1117; --surface: #1a1d27; --border: #2d3142;
+      --text: #e2e8f0; --text-muted: #64748b;
+      --blue: #3b82f6; --green: #22c55e; --orange: #f97316;
+      --yellow: #eab308; --red: #ef4444; --purple: #a855f7;
+    }
+    body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: var(--bg); color: var(--text); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+    header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 10px 20px; display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+    header h1 { font-size: 15px; font-weight: 700; color: var(--blue); }
+    .tag { font-size: 11px; background: #1e293b; color: var(--text-muted); padding: 2px 8px; border-radius: 4px; }
+    .header-right { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text-muted); }
+    .status-dot.ok { background: var(--green); box-shadow: 0 0 6px var(--green); }
+    .status-dot.error { background: var(--red); }
+    .status-text { font-size: 12px; color: var(--text-muted); }
+    .refresh-btn { background: var(--border); border: none; color: var(--text-muted); padding: 5px 10px; border-radius: 6px; font-size: 12px; cursor: pointer; }
+    .refresh-btn:hover { background: #3d4255; }
+
+    .tabs { background: var(--surface); border-bottom: 1px solid var(--border); display: flex; padding: 0 20px; flex-shrink: 0; }
+    .tab { padding: 9px 14px; font-size: 13px; color: var(--text-muted); cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.15s; user-select: none; }
+    .tab:hover { color: var(--text); }
+    .tab.active { color: var(--blue); border-bottom-color: var(--blue); font-weight: 500; }
+    .tab-badge { display: inline-flex; align-items: center; justify-content: center; background: var(--red); color: white; font-size: 10px; font-weight: 600; min-width: 16px; height: 16px; border-radius: 8px; padding: 0 4px; margin-left: 4px; vertical-align: top; }
+    .tab-badge.blue { background: var(--blue); }
+
+    .main { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
+    .panel { flex: 1; overflow-y: auto; padding: 14px 20px; display: flex; flex-direction: column; gap: 10px; }
+
+    .alert-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; border-left: 3px solid var(--border); }
+    .alert-card.critical { border-left-color: var(--red); }
+    .alert-card.high { border-left-color: var(--orange); }
+    .alert-card.medium { border-left-color: var(--yellow); }
+    .alert-card.resolved { border-left-color: var(--green); opacity: 0.65; }
+    .alert-card.diagnosing { border-left-color: var(--blue); }
+    .alert-card.pending { border-left-color: var(--text-muted); }
+    .alert-header { display: flex; align-items: center; gap: 8px; margin-bottom: 7px; }
+    .sev-badge { font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 4px; }
+    .sev-critical { background: rgba(239,68,68,0.18); color: var(--red); }
+    .sev-high { background: rgba(249,115,22,0.18); color: var(--orange); }
+    .sev-medium { background: rgba(234,179,8,0.18); color: var(--yellow); }
+    .sev-low { background: rgba(100,116,139,0.18); color: var(--text-muted); }
+    .alert-name { font-size: 13px; font-weight: 600; }
+    .alert-time { font-size: 11px; color: var(--text-muted); margin-left: auto; }
+    .alert-metrics { font-size: 12px; color: var(--text-muted); display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 7px; }
+    .mval { color: var(--text); font-weight: 500; }
+    .diagnosis { background: #13161f; border: 1px solid var(--border); border-radius: 8px; padding: 9px 12px; font-size: 12px; line-height: 1.65; margin-top: 6px; color: var(--text); }
+    .diag-label { font-size: 9px; color: var(--blue); font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 5px; }
+    .diag-footer { display: flex; align-items: center; gap: 6px; margin-top: 6px; font-size: 11px; color: var(--text-muted); }
+    .spinner { width: 11px; height: 11px; border: 2px solid currentColor; border-top-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .feishu-ok { color: var(--green); }
+    .feishu-fail { color: var(--red); }
+
+    .kb-case { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; border-left: 3px solid var(--blue); }
+    .kb-feature { font-size: 13px; color: var(--text); margin-bottom: 6px; }
+    .kb-cause { font-size: 12px; color: var(--yellow); margin-bottom: 5px; }
+    .kb-steps { font-size: 11px; color: var(--text-muted); padding-left: 10px; line-height: 1.7; }
+    .kb-meta { font-size: 10px; color: var(--text-muted); margin-top: 5px; display: flex; gap: 10px; }
+    .kb-ok { color: var(--green); }
+
+    .chat-wrap { flex: 1; display: flex; flex-direction: column; max-width: 680px; width: 100%; margin: 0 auto; padding: 14px 0; }
+    .chat-box { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; }
+    .chat-msg { max-width: 82%; padding: 9px 13px; border-radius: 12px; font-size: 13px; line-height: 1.6; }
+    .chat-user { align-self: flex-end; background: var(--blue); border: 1px solid var(--blue); }
+    .chat-agent { align-self: flex-start; background: var(--surface); border: 1px solid var(--border); }
+    .chat-input-row { display: flex; gap: 8px; }
+    .chat-input { flex: 1; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 9px 13px; color: var(--text); font-size: 13px; outline: none; }
+    .chat-input:focus { border-color: var(--blue); }
+    .chat-send { background: var(--blue); border: none; color: white; border-radius: 8px; padding: 9px 16px; font-size: 13px; cursor: pointer; }
+    .chat-send:hover { opacity: 0.85; }
+
+    .demo-panel { padding: 12px 20px; background: var(--surface); border-top: 1px solid var(--border); flex-shrink: 0; }
+    .demo-title { font-size: 11px; color: var(--text-muted); margin-bottom: 8px; }
+    .demo-buttons { display: flex; gap: 8px; flex-wrap: wrap; }
+    .demo-btn { padding: 6px 13px; border-radius: 7px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 12px; cursor: pointer; }
+    .demo-btn:hover { border-color: var(--blue); color: var(--blue); }
+    .demo-btn.cpu { border-color: var(--orange); color: var(--orange); }
+    .demo-btn.mem { border-color: var(--red); color: var(--red); }
+    .demo-btn.ok { border-color: var(--green); color: var(--green); }
+    .demo-status { margin-top: 7px; font-size: 11px; color: var(--text-muted); display: flex; gap: 14px; flex-wrap: wrap; }
+    .demo-status span { display: flex; align-items: center; gap: 4px; }
+    .dval { color: var(--text); font-weight: 500; }
+    .dval.warn { color: var(--orange); }
+    .dval.bad { color: var(--red); }
+    .dval.good { color: var(--green); }
+
+    .empty { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 180px; color: var(--text-muted); font-size: 13px; gap: 6px; }
+    .empty-ic { font-size: 36px; opacity: 0.25; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>OpsMind</h1>
+  <span class="tag">AI 诊断</span>
+  <div class="header-right">
+    <div class="status-dot" id="dot"></div>
+    <span class="status-text" id="statusTx">检测中...</span>
+    <button class="refresh-btn" id="refreshBtn">刷新</button>
+  </div>
+</header>
+
+<div class="tabs">
+  <div class="tab active" id="tab-alerts">告警列表 <span class="tab-badge" id="cntAlerts">0</span></div>
+  <div class="tab" id="tab-kb">知识库 <span class="tab-badge blue" id="cntKb">3</span></div>
+  <div class="tab" id="tab-chat">AI 对话</div>
+</div>
+
+<div class="main">
+  <div class="panel" id="panel-alerts"></div>
+  <div class="panel" id="panel-kb" style="display:none"></div>
+  <div class="panel" id="panel-chat" style="display:none;padding:0 20px;">
+    <div class="chat-wrap">
+      <div class="chat-box" id="chatBox"></div>
+      <div class="chat-input-row">
+        <input class="chat-input" id="chatInput" placeholder="描述告警现象，例如：Pod nginx CPU 99%" onkeydown="if(event.keyCode===13&&!event.shiftKey){event.preventDefault();sendMsg()}">
+        <button class="chat-send" onclick="window.sendMsg && window.sendMsg()">发送</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="demo-panel">
+  <div class="demo-title">&#x1F916; 模拟告警触发</div>
+  <div class="demo-buttons">
+    <button class="demo-btn cpu" id="btnCpu" >&#x1F525; CPU 异常</button>
+    <button class="demo-btn mem" id="btnMem" >&#x1F4BE; 内存泄漏</button>
+    <button class="demo-btn" id="btnLat" >&#x23F1; 延迟飙升</button>
+    <button class="demo-btn ok" id="btnOk" >&#x2705; 恢复正常</button>
+  </div>
+  <div class="demo-status" id="demoStatus">
+    <span>请求: <span class="dval" id="sReq">-</span></span>
+    <span>活跃: <span class="dval" id="sConn">-</span></span>
+    <span>错误: <span class="dval" id="sErr">-</span></span>
+    <span>CPU: <span class="dval" id="sCpu">-</span></span>
+    <span>内存: <span class="dval" id="sMem">-</span></span>
+  </div>
+</div>
+
+<script>
+(function() {
+  var curTab = 'alerts';
+  var chatHist = [];
+
+  // health
+  fetch('/api/health').then(function(r){return r.json();}).then(function(){
+    document.getElementById('dot').className = 'status-dot ok';
+    document.getElementById('statusTx').textContent = '服务正常';
+  }).catch(function(){
+    document.getElementById('dot').className = 'status-dot error';
+    document.getElementById('statusTx').textContent = '服务离线';
+  });
+
+  // tabs
+  document.getElementById('tab-alerts').addEventListener('click', function(){ setTab('alerts'); });
+  document.getElementById('tab-kb').addEventListener('click', function(){ setTab('kb'); });
+  document.getElementById('tab-chat').addEventListener('click', function(){ setTab('chat'); });
+  document.getElementById('refreshBtn').addEventListener('click', function(){ loadAlerts(); loadStatus(); });
+
+  window.setTab = function(tab) {
+    var i;
+    var tabs = document.querySelectorAll('.tab');
+    for (i = 0; i < tabs.length; i++) { tabs[i].classList.remove('active'); }
+    document.getElementById('tab-' + tab).classList.add('active');
+    document.getElementById('panel-alerts').style.display = tab === 'alerts' ? '' : 'none';
+    document.getElementById('panel-kb').style.display = tab === 'kb' ? '' : 'none';
+    document.getElementById('panel-chat').style.display = tab === 'chat' ? '' : 'none';
+    curTab = tab;
+    if (tab === 'alerts') loadAlerts();
+    if (tab === 'kb') loadKb();
+  };
+  function setTab(tab) { window.setTab(tab); }
+
+  // alerts
+  function loadAlerts() {
+    fetch('/api/alerts').then(function(r){return r.json();}).then(function(d){
+      var alerts = d.alerts || [];
+      document.getElementById('cntAlerts').textContent = alerts.length;
+      var panel = document.getElementById('panel-alerts');
+      if (!alerts.length) {
+        panel.innerHTML = '<div class="empty"><div class="empty-ic">&#x1F6E1;</div><div>暂无告警</div><div style="font-size:11px;color:var(--text-muted)">点击下方模拟按钮触发</div></div>';
+        return;
+      }
+      var h = '';
+      for (var i = 0; i < alerts.length; i++) {
+        var a = alerts[i];
+        var diag = a.diagnosis || '';
+        var diagH = diag ? '<div class="diagnosis"><div class="diag-label">AI 诊断</div><div>' + fmtDiag(diag) + '</div></div>' : '';
+        var spin = a.status === 'diagnosing' ? '<div class="spinner"></div>' : '';
+        var fsClass = a.notified ? 'feishu-ok' : 'feishu-fail';
+        var fsTxt = a.notified ? '&#x2713; 飞书' : '&#x2717; 未推';
+        var dur = a.diagnosisDurationMs ? '<span>' + (a.diagnosisDurationMs/1000).toFixed(1) + 's</span>' : '';
+        h += '<div class="alert-card ' + esc(a.severity||'low') + ' ' + esc(a.status||'') + '">' +
+          '<div class="alert-header">' +
+            '<span class="sev-badge sev-' + esc(a.severity||'low') + '">' + sevLbl(a.severity) + '</span>' +
+            '<span class="alert-name">' + esc(a.alertName||'未知') + '</span>' +
+            '<span class="alert-time">' + timeAgo(a.triggeredAt) + '</span>' +
+          '</div>' +
+          '<div class="alert-metrics">' +
+            '<span>指标 <span class="mval">' + esc(a.metricName||'-') + '</span></span>' +
+            '<span>值 <span class="mval">' + fmt(a.metricValue) + '</span></span>' +
+            '<span>阈值 <span class="mval">' + esc(a.condition||'?') + fmt(a.thresholdValue) + '</span></span>' +
+          '</div>' +
+          diagH +
+          '<div class="diag-footer">' +
+            spin +
+            '<span style="color:var(--text-muted)">' + stLbl(a.status) + '</span>' +
+            dur +
+            '<span style="margin-left:auto" class="' + fsClass + '">' + fsTxt + '</span>' +
+          '</div>' +
+        '</div>';
+      }
+      panel.innerHTML = h;
+    }).catch(function(e){
+      document.getElementById('panel-alerts').innerHTML = '<div class="empty"><div>加载失败: ' + esc(e.message) + '</div></div>';
+    });
+  }
+
+  function fmtDiag(t) {
+    return esc(t).replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>').replace(/`([^`]+)`/g,'<pre style="font-size:11px;background:#0f1117;padding:5px;border-radius:4px;overflow-x:auto">$1</pre>').replace(/\n/g,'<br>');
+  }
+  function sevLbl(s) { return {critical:'CRIT',high:'HIGH',medium:'MED',low:'LOW'}[s]||'LOW'; }
+  function stLbl(s) { return {pending:'等待诊断',diagnosing:'AI 诊断中...',resolved:'已解决',error:'诊断异常'}[s]||'等待'; }
+  function timeAgo(ts) {
+    if (!ts) return '-';
+    var d = new Date(ts);
+    var diff = Math.floor((Date.now() - d) / 1000);
+    if (diff < 60) return diff + '秒前';
+    if (diff < 3600) return Math.floor(diff/60) + '分钟前';
+    if (diff < 86400) return Math.floor(diff/3600) + '小时前';
+    return d.toLocaleDateString('zh-CN');
+  }
+  function fmt(v) { return v == null ? '-' : (typeof v === 'number' ? (v > 100 ? v.toFixed(0) : v.toFixed(2)) : v); }
+  function esc(s) { return s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+  // knowledge base
+  function loadKb() {
+    fetch('/api/kb').then(function(r){return r.json();}).then(function(d){
+      var cases = d.cases || [];
+      document.getElementById('cntKb').textContent = cases.length;
+      var panel = document.getElementById('panel-kb');
+      if (!cases.length) {
+        panel.innerHTML = '<div class="empty"><div class="empty-ic">&#x1F4DA;</div><div>暂无案例</div></div>';
+        return;
+      }
+      var h = '';
+      for (var i = 0; i < cases.length; i++) {
+        var c = cases[i];
+        var steps = (c.solutionSteps||'').split('\n').filter(function(s){return s && s.trim();});
+        var stepsH = '';
+        for (var j = 0; j < steps.length; j++) { stepsH += '<div>&#x2022; ' + esc(steps[j].trim()) + '</div>'; }
+        h += '<div class="kb-case">' +
+          '<div class="kb-feature">' + esc(c.alertFeatures||'') + '</div>' +
+          '<div class="kb-cause">&#x1F914; ' + esc(c.rootCause||'') + '</div>' +
+          '<div class="kb-steps">' + stepsH + '</div>' +
+          '<div class="kb-meta"><span>ID: ' + esc(c.id||'') + '</span><span>' + esc(c.createdAt||'') + '</span><span class="kb-ok">&#x2713; ' + esc(c.result||'') + '</span></div>' +
+        '</div>';
+      }
+      panel.innerHTML = h;
+    }).catch(function(e){
+      document.getElementById('panel-kb').innerHTML = '<div class="empty"><div>加载失败: ' + esc(e.message) + '</div></div>';
+    });
+  }
+
+  // chat
+  function sendMsg() {
+    var inp = document.getElementById('chatInput');
+    var text = inp.value.trim();
+    if (!text) return;
+    inp.value = '';
+    chatHist.push({role:'user', content: text});
+    renderChat();
+    var loading = document.createElement('div');
+    loading.className = 'chat-msg chat-agent';
+    loading.textContent = 'AI 诊断中...';
+    document.getElementById('chatBox').appendChild(loading);
+    document.getElementById('chatBox').lastElementChild.scrollIntoView();
+    fetch('/api/diagnosis', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({input: text})
+    }).then(function(r){return r.json();}).then(function(d){
+      loading.textContent = d.conclusion || '无结论';
+      chatHist.push({role:'agent', content: d.conclusion || '无结论'});
+      setTimeout(loadAlerts, 2000);
+    }).catch(function(e){
+      loading.textContent = '请求失败: ' + e.message;
+    });
+  }
+
+  function renderChat() {
+    var box = document.getElementById('chatBox');
+    var h = '';
+    for (var i = 0; i < chatHist.length; i++) {
+      var m = chatHist[i];
+      var cls = m.role === 'user' ? 'chat-user' : 'chat-agent';
+      h += '<div class="chat-msg ' + cls + '">' + fmtDiag(m.content) + '</div>';
+    }
+    box.innerHTML = h;
+    box.lastElementChild && box.lastElementChild.scrollIntoView();
+  }
+
+  // demo
+  window.demo = function(action) {
+    var url = action === 'resolve' ? '/api/demo/resolve' : '/api/demo/' + action;
+    var btnId = {'cpu-spike':'btnCpu','memory-leak':'btnMem','latency-spike':'btnLat','resolve':'btnOk'}[action];
+    var btn = btnId ? document.getElementById(btnId) : null;
+    var origText = btn ? btn.textContent : '';
+    if (btn) { btn.textContent = '...触发中'; btn.style.opacity = '0.6'; }
+    fetch(url).then(function(r){return r.json();}).then(function(d){
+      if (btn) { btn.textContent = origText; btn.style.opacity = '1'; }
+      loadStatus();
+      setTimeout(loadAlerts, 2500);
+    }).catch(function(e){
+      if (btn) { btn.textContent = origText; btn.style.opacity = '1'; }
+      console.log(e);
+    });
+  };
+  function demo(action) { window.demo(action); }
+
+  function loadStatus() {
+    fetch('/api/demo/status').then(function(r){return r.json();}).then(function(d){
+      var set = function(id, val, cls) {
+        var el = document.getElementById(id);
+        if (el) { el.textContent = val; el.className = 'dval' + (cls ? ' ' + cls : ''); }
+      };
+      set('sReq', d.requestCount || '-');
+      set('sConn', d.activeConnections || '-');
+      set('sErr', d.errorCount || '-');
+      set('sCpu', d.cpuSpike ? '异常' : '正常', d.cpuSpike ? 'warn' : 'good');
+      set('sMem', d.memoryLeak ? '泄漏' : '正常', d.memoryLeak ? 'bad' : 'good');
+    });
+  }
+
+  // demo button listeners (attached after demo fn is defined)
+  document.getElementById('btnCpu').onclick = function(){ demo('cpu-spike'); };
+  document.getElementById('btnMem').onclick = function(){ demo('memory-leak'); };
+  document.getElementById('btnLat').onclick = function(){ demo('latency-spike'); };
+  document.getElementById('btnOk').onclick = function(){ demo('resolve'); };
+
+  // start
+  loadAlerts();
+  loadStatus();
+  setInterval(function() {
+    if (curTab === 'alerts') loadAlerts();
+    loadStatus();
+  }, 10000);
+})();
+</script>
+</body>
+</html>
