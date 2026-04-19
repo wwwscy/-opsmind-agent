@@ -76,7 +76,6 @@ public class AnomalyDetector {
                 }
                 firingMetrics.add(rule.getMetric());
                 log.warn("[AnomalyDetector] FIRE alert={} metric={} val={}", rule.getName(), rule.getMetric(), val);
-                metricsCollector.recordAlertDuration(rule.getMetric(), false);
                 AlertRecord alert = createAlert(rule, val);
                 if (monitoringProperties.isAutoDiagnosisEnabled() || monitoringProperties.isFeishuEnabled()) {
                     triggerAsync(alert, rule, val);
